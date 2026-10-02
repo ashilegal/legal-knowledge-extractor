@@ -23,6 +23,15 @@ class Document(BaseModel):
     status: DocumentStatus = DocumentStatus.PENDING
 
 
+class TextLine(BaseModel):
+    """One line of text with its font info, used later to detect headings."""
+
+    text: str
+    size: float = 0.0                 # font size in points
+    bold: bool = False
+    y: float = 0.0                    # position from top: 0.0 = top edge, 1.0 = bottom edge
+
+
 class Page(BaseModel):
     doc_id: str
     page_number: int                  # 1-based, as printed in the PDF viewer
@@ -30,6 +39,7 @@ class Page(BaseModel):
     char_count: int = 0
     is_ocr: bool = False
     ocr_confidence: float | None = None
+    lines: list[TextLine] = Field(default_factory=list)
 
 
 class Section(BaseModel):

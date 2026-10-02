@@ -2,7 +2,7 @@
 
 import hashlib
 
-from lke.models.document import Document, DocumentStatus, Page, Section
+from lke.models.document import Document, DocumentStatus, Page, Section, TextLine
 from lke.models.facts import Evidence, Fact, FactType, Support
 from lke.models.records import (
     AnyRecord,
@@ -29,5 +29,5 @@ __all__ = [
     "AnyRecord", "Basis", "CaseRecord", "ComparisonRecord", "ConceptRecord",
     "Document", "DocumentStatus", "Evidence", "EvidenceRef", "ExampleRecord",
     "Fact", "FactType", "Page", "Relation", "RelationType", "RuleRecord",
-    "Section", "Statement", "Support", "make_id", "parse_record",
+    "Section", "Statement", "Support", "TextLine", "make_id", "parse_record",
 ]

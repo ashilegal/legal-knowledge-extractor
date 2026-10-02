@@ -4,6 +4,8 @@ from rich.table import Table
 
 from lke import __version__
 from lke.config import load_settings
+from lke.ingest import scan_inbox
+from lke.pipeline.stages import run_ingest
 from lke.store import Checkpoint, Library
 
 app = typer.Typer(help="Legal Knowledge Extractor")
@@ -26,6 +28,30 @@ def version():
 def run():
     """Process all PDFs in the inbox (not implemented yet)."""
     typer.echo("Pipeline not implemented yet.")
+
+
+@app.command()
+def ingest():
+    """Stage 1 only: read every PDF in the inbox into work/<doc_id>/pages.jsonl."""
+    settings = load_settings()
+    settings.ensure_dirs()
+    files = scan_inbox(settings.path("inbox"))
+    if not files:
+        console.print(f"No PDFs found in {settings.path('inbox')}")
+        raise typer.Exit()
+
+    table = Table(title=f"Ingest ({len(files)} file(s))")
+    for col in ("file", "doc_id", "pages", "ocr", "status", "notes"):
+        table.add_column(col)
+    with Library(settings.path("library") / "library.db") as lib:
+        for path in files:
+            console.print(f"Reading {path.name} ...")
+            o = run_ingest(path, settings, lib)
+            colour = {"done": "green", "skipped": "cyan"}.get(o.status, "red")
+            table.add_row(o.filename, o.doc_id, str(o.pages), str(o.ocr_pages),
+                          f"[{colour}]{o.status}[/{colour}]", o.message)
+    console.print(table)
+    console.print(f"Output: {settings.path('work')}")
 
 
 @app.command()
