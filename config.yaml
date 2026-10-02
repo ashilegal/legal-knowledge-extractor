@@ -25,11 +25,20 @@ sectioning:
 
 llm:
   provider: anthropic
-  classify_model: claude-haiku-4-5-20251001
-  extract_model: claude-sonnet-5-5
-  max_retries: 3
-  max_concurrent_requests: 4
-  use_batch_api: false       # set to true for big overnight runs (cheaper)
+  extract_model: claude-opus-5-5     # pass 1: section -> facts
+  extract_effort: medium             # low | medium | high | xhigh | max
+  compose_model: claude-opus-5-5     # pass 2: facts -> records (never sees the source)
+  compose_effort: medium
+  classify_model: claude-haiku-4-5   # only used when classify_with_llm is true
+  classify_with_llm: false           # ask the LLM about sections the free rules can't classify
+  refusal_fallback: true             # if a request is declined, retry on a fallback model
+  max_output_tokens: 16000
+  max_retries: 3                     # network / rate-limit / server errors
+  max_concurrent_requests: 4         # parallel LLM calls per document
+  prices_per_million:                # USD [input, output], used for cost estimates
+    claude-opus-5-5: [4.0, 20.0]
+    claude-sonnet-5-5: [2.0, 10.0]
+    claude-haiku-4-5: [1.0, 5.0]
 
 validation:
   max_shared_word_run: 12    # this many consecutive words copied from the source = fail

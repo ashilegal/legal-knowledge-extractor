@@ -39,11 +39,21 @@ class SectioningConfig(BaseModel):
 
 class LlmConfig(BaseModel):
     provider: str = "anthropic"
-    classify_model: str = "claude-haiku-4-5-20251001"
-    extract_model: str = "claude-sonnet-5-5"
+    extract_model: str = "claude-opus-5-5"
+    extract_effort: str = "medium"
+    compose_model: str = "claude-opus-5-5"
+    compose_effort: str = "medium"
+    classify_model: str = "claude-haiku-4-5"
+    classify_with_llm: bool = False
+    refusal_fallback: bool = True
+    max_output_tokens: int = 16000
     max_retries: int = 3
     max_concurrent_requests: int = 4
-    use_batch_api: bool = False
+    prices_per_million: dict[str, tuple[float, float]] = Field(default_factory=lambda: {
+        "claude-opus-5-5": (4.0, 20.0),
+        "claude-sonnet-5-5": (2.0, 10.0),
+        "claude-haiku-4-5": (1.0, 5.0),
+    })
 
 
 class ValidationConfig(BaseModel):
