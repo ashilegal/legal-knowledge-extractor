@@ -81,6 +81,20 @@ CREATE TABLE IF NOT EXISTS relations (
 );
 CREATE INDEX IF NOT EXISTS idx_relations_to ON relations(to_id);
 
+CREATE TABLE IF NOT EXISTS review_queue (
+    review_id    TEXT PRIMARY KEY,
+    record_id    TEXT NOT NULL,                  -- library record it would merge into
+    record_type  TEXT NOT NULL,
+    title        TEXT NOT NULL,
+    doc_id       TEXT NOT NULL,
+    section_id   TEXT NOT NULL,
+    reasons      TEXT NOT NULL DEFAULT '[]',
+    status       TEXT NOT NULL DEFAULT 'pending', -- pending | approved | rejected
+    data         TEXT NOT NULL,
+    created_at   TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_review_status ON review_queue(status);
+
 CREATE VIRTUAL TABLE IF NOT EXISTS records_fts USING fts5(
     record_id UNINDEXED, record_type UNINDEXED, title, body
 );
@@ -158,6 +172,64 @@ class Library:
                 (topic_id, name, parent_id),
             )
 
+    def topic_tree(self) -> list[sqlite3.Row]:
+        return self.conn.execute(
+            """SELECT t.topic_id, t.name, t.parent_id,
+                      (SELECT COUNT(*) FROM records r
+                        WHERE r.topic_id = t.topic_id OR r.subtopic_id = t.topic_id) AS n
+               FROM topics t ORDER BY t.parent_id IS NOT NULL, t.name"""
+        ).fetchall()
+
+    # ---------- entities ----------
+
+    def upsert_entity(self, entity_id: str, entity_type: str, canonical: str, alias: str) -> None:
+        row = self.conn.execute(
+            "SELECT aliases FROM entities WHERE entity_id=?", (entity_id,)).fetchone()
+        aliases = json.loads(row["aliases"]) if row else []
+        if alias and alias not in aliases:
+            aliases.append(alias)
+        with self.conn:
+            self.conn.execute(
+                """INSERT INTO entities (entity_id, entity_type, canonical, aliases)
+                   VALUES (?, ?, ?, ?)
+                   ON CONFLICT(entity_id) DO UPDATE SET aliases=excluded.aliases""",
+                (entity_id, entity_type, canonical, json.dumps(aliases, ensure_ascii=False)),
+            )
+
+    def count_entities(self) -> dict[str, int]:
+        rows = self.conn.execute(
+            "SELECT entity_type, COUNT(*) AS n FROM entities GROUP BY entity_type").fetchall()
+        return {r["entity_type"]: r["n"] for r in rows}
+
+    # ---------- review queue ----------
+
+    def add_review(self, review_id: str, record: AnyRecord, doc_id: str, section_id: str) -> None:
+        with self.conn:
+            self.conn.execute(
+                """INSERT INTO review_queue (review_id, record_id, record_type, title, doc_id,
+                                             section_id, reasons, data)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                   ON CONFLICT(review_id) DO UPDATE SET data=excluded.data,
+                       reasons=excluded.reasons, status='pending'""",
+                (review_id, record.record_id, record.record_type, record_title(record), doc_id,
+                 section_id, json.dumps(record.flags.reasons, ensure_ascii=False),
+                 record.model_dump_json()),
+            )
+
+    def list_reviews(self, status: str = "pending") -> list[sqlite3.Row]:
+        return self.conn.execute(
+            "SELECT * FROM review_queue WHERE status=? ORDER BY created_at", (status,)
+        ).fetchall()
+
+    def get_review(self, review_id: str) -> sqlite3.Row | None:
+        return self.conn.execute(
+            "SELECT * FROM review_queue WHERE review_id=?", (review_id,)).fetchone()
+
+    def set_review_status(self, review_id: str, status: str) -> None:
+        with self.conn:
+            self.conn.execute("UPDATE review_queue SET status=? WHERE review_id=?",
+                              (status, review_id))
+
     # ---------- records ----------
 
     def save_record(self, record: AnyRecord) -> None:
@@ -228,6 +300,9 @@ class Library:
                 (rel.from_id, rel.relation.value, rel.to_id, rel.basis.value,
                  json.dumps(rel.evidence_ids)),
             )
+
+    def all_relations(self) -> list[sqlite3.Row]:
+        return self.conn.execute("SELECT * FROM relations ORDER BY from_id").fetchall()
 
     def relations_of(self, record_id: str) -> list[sqlite3.Row]:
         return self.conn.execute(

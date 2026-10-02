@@ -132,6 +132,15 @@ def subtopic_id(topic: str, name: str) -> str:
     return make_id("sub", " ".join(topic.lower().split()), " ".join(name.lower().split()))
 
 
+def record_id_for(record_type: str, name: str) -> str | None:
+    """The library id a CASE / CONCEPT / RULE with this name has (or will have)."""
+    if record_type == "CASE":
+        return make_id("rec", f"CASE:{term_key('case_name', name)}")
+    if record_type in ("CONCEPT", "RULE"):
+        return make_id("rec", f"{record_type}:{term_key('statute', name)}")
+    return None
+
+
 def identity_key(item: ExtractedItem, section: Section) -> str:
     """What makes two records 'the same thing' across sections and documents."""
     t = item.record_type
@@ -267,16 +276,24 @@ def build_record(section: Section, item: ExtractedItem, composed: ComposedRecord
     return parse_record(data)
 
 
-def build_records(section: Section, facts: SectionFacts,
-                  composed: dict[str, ComposedRecord], settings: Settings
-                  ) -> tuple[list[AnyRecord], list[str]]:
-    """Returns (records, errors). An item that cannot form a valid record is reported."""
-    records, errors = [], []
+def build_record_pairs(section: Section, facts: SectionFacts,
+                       composed: dict[str, ComposedRecord], settings: Settings
+                       ) -> tuple[list[tuple[ExtractedItem, AnyRecord]], list[str]]:
+    """Returns ([(item, record)], errors). An item that cannot form a valid record is
+    reported in errors instead of stopping the section."""
+    pairs, errors = [], []
     model_info = f"{facts.model} / {settings.llm.compose_model}"
     for item in facts.items:
         try:
-            records.append(build_record(section, item, composed.get(item.key), settings,
-                                        model_info))
-        except Exception as e:  # schema problems are reported, not fatal
+            pairs.append((item, build_record(section, item, composed.get(item.key), settings,
+                                             model_info)))
+        except Exception as e:
             errors.append(f"{item.key} ({item.record_type} '{item.name}'): {e}")
-    return records, errors
+    return pairs, errors
+
+
+def build_records(section: Section, facts: SectionFacts,
+                  composed: dict[str, ComposedRecord], settings: Settings
+                  ) -> tuple[list[AnyRecord], list[str]]:
+    pairs, errors = build_record_pairs(section, facts, composed, settings)
+    return [record for _, record in pairs], errors

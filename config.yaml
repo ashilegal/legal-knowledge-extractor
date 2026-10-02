@@ -48,4 +48,4 @@ validation:
   max_quote_words: 40
 
 batch:
-  parallel_documents: 2
+  parallel_documents: 1      # documents at once (each already makes parallel LLM calls)

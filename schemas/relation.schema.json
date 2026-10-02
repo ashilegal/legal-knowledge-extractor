@@ -1,0 +1,60 @@
+{
+  "$defs": {
+    "Basis": {
+      "enum": [
+        "source",
+        "interpretation"
+      ],
+      "title": "Basis",
+      "type": "string"
+    },
+    "RelationType": {
+      "enum": [
+        "part_of",
+        "interprets",
+        "applies",
+        "establishes",
+        "illustrates",
+        "cites",
+        "overrules",
+        "distinguishes",
+        "compares",
+        "defines",
+        "related_to"
+      ],
+      "title": "RelationType",
+      "type": "string"
+    }
+  },
+  "properties": {
+    "from_id": {
+      "title": "From Id",
+      "type": "string"
+    },
+    "relation": {
+      "$ref": "#/$defs/RelationType"
+    },
+    "to_id": {
+      "title": "To Id",
+      "type": "string"
+    },
+    "basis": {
+      "$ref": "#/$defs/Basis",
+      "default": "source"
+    },
+    "evidence_ids": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Evidence Ids",
+      "type": "array"
+    }
+  },
+  "required": [
+    "from_id",
+    "relation",
+    "to_id"
+  ],
+  "title": "Relation",
+  "type": "object"
+}

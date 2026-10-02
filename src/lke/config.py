@@ -65,7 +65,7 @@ class ValidationConfig(BaseModel):
 
 
 class BatchConfig(BaseModel):
-    parallel_documents: int = 2
+    parallel_documents: int = 1
 
 
 class Settings(BaseModel):
