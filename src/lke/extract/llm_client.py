@@ -21,6 +21,10 @@ class LLMError(Exception):
     """The model call did not produce usable output."""
 
 
+class LLMSetupError(Exception):
+    """The model cannot be used at all (not running, not installed, bad key): stop the run."""
+
+
 class LLMRefusal(LLMError):
     """The model declined the request (stop_reason == 'refusal')."""
 
@@ -151,5 +155,11 @@ class AnthropicLLM:
         return self.client.messages.create(**params)
 
 
-def make_llm(cfg: LlmConfig) -> AnthropicLLM:
-    return AnthropicLLM(cfg)
+def make_llm(cfg: LlmConfig) -> JsonLLM:
+    """'anthropic' (paid API) or 'ollama' (free, runs on this computer)."""
+    if cfg.provider == "ollama":
+        from lke.extract.ollama_client import OllamaLLM
+        return OllamaLLM(cfg)
+    if cfg.provider == "anthropic":
+        return AnthropicLLM(cfg)
+    raise ValueError(f"unknown llm.provider '{cfg.provider}' (use 'ollama' or 'anthropic')")

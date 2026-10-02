@@ -69,10 +69,21 @@ def run(
         for f in inbox:
             console.print(f"  {f.name}")
         raise typer.Exit(1)
-    if not dry_run and not (os.getenv("ANTHROPIC_API_KEY") or os.getenv("ANTHROPIC_AUTH_TOKEN")):
-        console.print("[red]ANTHROPIC_API_KEY is not set.[/red] Add it to the .env file "
-                      "(see .env.example), or use --dry-run.")
+    provider = settings.llm.provider
+    if not dry_run and provider == "anthropic" and not (
+            os.getenv("ANTHROPIC_API_KEY") or os.getenv("ANTHROPIC_AUTH_TOKEN")):
+        console.print("[red]ANTHROPIC_API_KEY is not set.[/red] Add it to the .env file, or set "
+                      "llm.provider: ollama in config.yaml to use a free local model.")
         raise typer.Exit(1)
+    if not dry_run and provider == "ollama":
+        from lke.extract import LLMSetupError
+        from lke.extract.ollama_client import OllamaLLM
+        try:
+            OllamaLLM(settings.llm).check()
+        except LLMSetupError as e:
+            console.print(f"[red]{e}[/red]")
+            raise typer.Exit(1)
+        console.print(f"Using local model {settings.llm.ollama_model} (free; slower than the API)")
 
     started = datetime.now()
     console.print(f"{'Dry run' if dry_run else 'Processing'}: {len(files)} file(s)")
@@ -94,7 +105,10 @@ def run(
         e = result.estimate
         console.print(f"Sections to send to the LLM: {e['sections']} "
                       f"(~{e['section_tokens']:,} tokens of text)")
-        console.print(f"Estimated cost: ${e['low_usd']:.2f} - ${e['high_usd']:.2f}")
+        if settings.llm.provider == "ollama":
+            console.print("Cost: $0 (local model). Time depends on your computer.")
+        else:
+            console.print(f"Estimated cost: ${e['low_usd']:.2f} - ${e['high_usd']:.2f}")
     elif not dry_run:
         console.print(f"Approximate API cost of this run: "
                       f"${result.usage.cost(settings.llm.prices_per_million):.2f}")

@@ -17,14 +17,19 @@ tables:
   enabled: true              # detect tables and keep their rows/columns
 
 sectioning:
-  target_tokens: 5000        # preferred size of one section sent to the LLM
-  max_tokens: 8000           # bigger sections are split at paragraph boundaries
+  target_tokens: 2500        # preferred size of one section sent to the LLM (5000 for the API)
+  max_tokens: 4000           # bigger sections are split at paragraph boundaries (8000 for the API)
   min_tokens: 300            # smaller sections are merged with neighbours
   overlap_tokens: 200        # repeated text between split parts
   max_heading_levels: 3
 
 llm:
-  provider: anthropic
+  provider: ollama                   # ollama = free model on this computer; anthropic = paid API
+  ollama_url: http://localhost:11434
+  ollama_model: qwen2.5:7b           # see README for which model suits your RAM
+  ollama_context: 16384
+  ollama_timeout: 1800
+  # --- used only when provider is anthropic ---
   extract_model: claude-opus-5-5     # pass 1: section -> facts
   extract_effort: medium             # low | medium | high | xhigh | max
   compose_model: claude-opus-5-5     # pass 2: facts -> records (never sees the source)
@@ -34,7 +39,7 @@ llm:
   refusal_fallback: true             # if a request is declined, retry on a fallback model
   max_output_tokens: 16000
   max_retries: 3                     # network / rate-limit / server errors
-  max_concurrent_requests: 4         # parallel LLM calls per document
+  max_concurrent_requests: 1         # parallel LLM calls (1 for a local model, 4 for the API)
   prices_per_million:                # USD [input, output], used for cost estimates
     claude-opus-5-5: [4.0, 20.0]
     claude-sonnet-5-5: [2.0, 10.0]

@@ -12,7 +12,7 @@ import anthropic
 from lke.classify import SectionClass
 from lke.classify.llm_classifier import classify_with_llm
 from lke.config import Settings
-from lke.extract import JsonLLM, LLMError, compose_records, extract_facts
+from lke.extract import JsonLLM, LLMError, LLMSetupError, compose_records, extract_facts
 from lke.extract.fact_extractor import SectionFacts
 from lke.extract.record_composer import build_record_pairs
 from lke.link import store_record
@@ -38,7 +38,7 @@ log = logging.getLogger(__name__)
 
 # errors that make every further call pointless: stop the whole run
 FATAL_ERRORS = (anthropic.AuthenticationError, anthropic.PermissionDeniedError,
-                anthropic.NotFoundError)
+                anthropic.NotFoundError, LLMSetupError)
 
 
 class FatalRunError(Exception):

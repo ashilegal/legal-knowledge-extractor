@@ -51,5 +51,6 @@ def test_make_id_is_stable():
 
 def test_load_settings_reads_config():
     settings = load_settings()
-    assert settings.sectioning.max_tokens == 8000
+    assert settings.sectioning.max_tokens > settings.sectioning.target_tokens
+    assert settings.llm.provider in ("ollama", "anthropic")
     assert settings.path("inbox").name == "inbox"

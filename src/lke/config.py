@@ -38,7 +38,11 @@ class SectioningConfig(BaseModel):
 
 
 class LlmConfig(BaseModel):
-    provider: str = "anthropic"
+    provider: str = "ollama"                  # "ollama" (free, local) or "anthropic" (paid API)
+    ollama_url: str = "http://localhost:11434"
+    ollama_model: str = "qwen2.5:7b"
+    ollama_context: int = 16384               # tokens the local model can read at once
+    ollama_timeout: int = 1800                # seconds per call (local models can be slow)
     extract_model: str = "claude-opus-5-5"
     extract_effort: str = "medium"
     compose_model: str = "claude-opus-5-5"

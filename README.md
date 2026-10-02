@@ -15,8 +15,27 @@ PDF folder → text / OCR → topics & sections → content types → facts (LLM
 python -m venv .venv
 .venv\Scripts\activate            # Mac/Linux: source .venv/bin/activate
 pip install -e ".[dev]"
-copy .env.example .env            # then put your Anthropic API key in .env
 ```
+
+### Choose the AI model
+
+**Free (default): a model on your own computer, through [Ollama](https://ollama.com/download).**
+No API key, no cost, and the documents never leave your computer. It is slower and less accurate
+than the paid API.
+
+1. Install Ollama from https://ollama.com/download and start it.
+2. Download a model that fits your computer's memory (RAM):
+
+   | RAM | Command | `ollama_model` in config.yaml |
+   |---|---|---|
+   | 8 GB | `ollama pull qwen2.5:3b` | `qwen2.5:3b` |
+   | 16 GB | `ollama pull qwen2.5:7b` | `qwen2.5:7b` (default) |
+   | 32 GB+ | `ollama pull qwen2.5:14b` | `qwen2.5:14b` |
+
+**Paid: the Anthropic API** (better quality, faster). Set `provider: anthropic` in
+`config.yaml`, copy `.env.example` to `.env` and put your API key there. With the API you can
+also raise `sectioning.target_tokens` to 5000, `max_tokens` to 8000 and
+`max_concurrent_requests` to 4.
 
 For scanned PDFs, also install [Tesseract OCR](https://github.com/UB-Mannheim/tesseract/wiki) and set
 `TESSDATA_PREFIX` in `.env`.
@@ -76,7 +95,7 @@ Each run writes a summary to `data/reports/run-<time>.md`.
 
 Everything is in `config.yaml`: section sizes, OCR, models and effort, overlap thresholds,
 whether short statutory quotes may be stored, parallelism and prices for cost estimates.
-For a lower cost, set `extract_model` / `compose_model` to `claude-sonnet-5-5`.
+With the paid API, set `extract_model` / `compose_model` to `claude-sonnet-5-5` for a lower cost.
 
 ## Tests
 
