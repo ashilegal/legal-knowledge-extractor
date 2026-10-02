@@ -1,1 +1,102 @@
 """Loads config.yaml + .env."""
+
+from __future__ import annotations
+
+import os
+from pathlib import Path
+
+import yaml
+from dotenv import load_dotenv
+from pydantic import BaseModel, Field
+
+
+class PathsConfig(BaseModel):
+    inbox: Path = Path("data/inbox")
+    quarantine: Path = Path("data/quarantine")
+    work: Path = Path("data/work")
+    library: Path = Path("data/library")
+    review: Path = Path("data/review")
+    reports: Path = Path("data/reports")
+
+
+class OcrConfig(BaseModel):
+    enabled: bool = True
+    min_chars_per_page: int = 50
+    language: str = "eng"
+
+
+class SectioningConfig(BaseModel):
+    target_tokens: int = 5000
+    max_tokens: int = 8000
+    overlap_tokens: int = 200
+
+
+class LlmConfig(BaseModel):
+    provider: str = "anthropic"
+    classify_model: str = "claude-haiku-4-5-20251001"
+    extract_model: str = "claude-sonnet-5-5"
+    max_retries: int = 3
+    max_concurrent_requests: int = 4
+    use_batch_api: bool = False
+
+
+class ValidationConfig(BaseModel):
+    max_shared_word_run: int = 12
+    max_ngram_overlap: float = 0.15
+    max_regenerate_attempts: int = 1
+    allow_statute_quotes: bool = True
+    max_quote_words: int = 40
+
+
+class BatchConfig(BaseModel):
+    parallel_documents: int = 2
+
+
+class Settings(BaseModel):
+    root: Path = Field(default_factory=Path.cwd)
+    paths: PathsConfig = Field(default_factory=PathsConfig)
+    jurisdiction: str = "mixed"
+    ocr: OcrConfig = Field(default_factory=OcrConfig)
+    sectioning: SectioningConfig = Field(default_factory=SectioningConfig)
+    llm: LlmConfig = Field(default_factory=LlmConfig)
+    validation: ValidationConfig = Field(default_factory=ValidationConfig)
+    batch: BatchConfig = Field(default_factory=BatchConfig)
+
+    @property
+    def anthropic_api_key(self) -> str | None:
+        return os.getenv("ANTHROPIC_API_KEY")
+
+    def path(self, name: str) -> Path:
+        """Absolute path for a configured folder, e.g. settings.path("inbox")."""
+        return self.root / getattr(self.paths, name)
+
+    def ensure_dirs(self) -> None:
+        for name in PathsConfig.model_fields:
+            self.path(name).mkdir(parents=True, exist_ok=True)
+
+
+def find_project_root(start: Path | None = None) -> Path:
+    """Walk up from `start` until a folder containing config.yaml is found."""
+    current = (start or Path.cwd()).resolve()
+    for folder in (current, *current.parents):
+        if (folder / "config.yaml").exists():
+            return folder
+    raise FileNotFoundError(
+        "config.yaml not found. Run lke from inside the project folder."
+    )
+
+
+def load_settings(config_path: Path | None = None) -> Settings:
+    if config_path is None:
+        root = find_project_root()
+        config_path = root / "config.yaml"
+    else:
+        config_path = config_path.resolve()
+        root = config_path.parent
+
+    load_dotenv(root / ".env")
+
+    with config_path.open(encoding="utf-8") as f:
+        raw = yaml.safe_load(f) or {}
+
+    return Settings(root=root, **raw)
