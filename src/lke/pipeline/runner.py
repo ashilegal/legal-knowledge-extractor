@@ -201,11 +201,30 @@ def process_document(doc_id: str, settings: Settings, lib: Library, llm: JsonLLM
         cp.start(doc_id, Stage.EXTRACT, s.section_id)
 
     workers = max(1, settings.llm.max_concurrent_requests)
+    try:
+        _run_sections(todo, classes, settings, llm, low_pages, lib, cp, report, workers)
+    except FatalRunError as e:
+        # leave a clear state behind: nothing 'running', document marked failed
+        cp.recover_interrupted()
+        lib.set_document_status(doc_id, DocumentStatus.FAILED, f"stopped: {e}")
+        raise
+
+    if report.sections_failed:
+        report.status = "partial"
+        lib.set_document_status(doc_id, DocumentStatus.FAILED,
+                                f"{report.sections_failed} section(s) failed")
+    else:
+        lib.set_document_status(doc_id, DocumentStatus.DONE)
+    return report, sections, classes
+
+
+def _run_sections(todo, classes, settings, llm, low_pages, lib, cp, report, workers) -> None:
     with ThreadPoolExecutor(max_workers=workers) as pool:
         futures = {pool.submit(process_section, s, classes[s.section_id], settings, llm,
                                low_pages): s for s in todo}
         for future, section in futures.items():
             out = future.result()                 # FatalRunError propagates and stops the run
+            doc_id = section.doc_id
             if out.error:
                 report.sections_failed += 1
                 report.errors.append(f"{section.title} (p. {section.page_start}-"
@@ -220,14 +239,6 @@ def process_document(doc_id: str, settings: Settings, lib: Library, llm: JsonLLM
             report.records_saved += len(out.records)
             report.records_for_review += len(out.review)
             report.regenerated += out.regenerated
-
-    if report.sections_failed:
-        report.status = "partial"
-        lib.set_document_status(doc_id, DocumentStatus.FAILED,
-                                f"{report.sections_failed} section(s) failed")
-    else:
-        lib.set_document_status(doc_id, DocumentStatus.DONE)
-    return report, sections, classes
 
 
 def process_file(path: Path, settings: Settings, lib: Library, llm: JsonLLM | None,

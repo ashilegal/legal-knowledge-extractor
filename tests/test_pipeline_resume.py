@@ -109,6 +109,9 @@ def test_bad_api_key_stops_the_run(tmp_path):
                                           response=httpx2.Response(401, request=request), body=None)
     with pytest.raises(FatalRunError):
         process_file(pdf, settings, lib, Exploding(fail_on={0}, error=error))
+    doc = lib.list_documents()[0]
+    assert doc["status"] == "failed" and "stopped" in doc["error"]
+    assert "running" not in str(Checkpoint(lib).summary())     # nothing left half-done
     lib.close()
 
 
