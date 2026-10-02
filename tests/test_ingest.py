@@ -117,3 +117,31 @@ def test_scanned_page_without_ocr_is_reported(tmp_path):
         outcome = run_ingest(pdf, settings, lib)
     assert outcome.status == "done"
     assert "not OCR'd" in outcome.message
+
+
+def test_quarantine_still_works_when_file_is_locked(tmp_path, monkeypatch):
+    import shutil
+    from lke.pipeline import stages
+
+    settings = make_settings(tmp_path)
+    bad = settings.path("inbox") / "locked.pdf"
+    bad.write_bytes(b"not a pdf")
+
+    def locked(*args, **kwargs):
+        raise PermissionError("[WinError 32] file in use")
+    monkeypatch.setattr(stages.shutil, "move", locked)
+    with Library(settings.path("library") / "library.db") as lib:
+        outcome = run_ingest(bad, settings, lib)
+    assert outcome.status == "quarantined"
+    assert (settings.path("quarantine") / "locked.pdf").exists()
+    assert "could not be moved" in (settings.path("quarantine") / "locked.pdf.error.txt").read_text()
+    del shutil
+
+
+def test_status_is_pending_after_ingest(tmp_path):
+    from lke.models import DocumentStatus
+    settings = make_settings(tmp_path)
+    pdf = make_text_pdf(settings.path("inbox") / "notes.pdf")
+    with Library(settings.path("library") / "library.db") as lib:
+        outcome = run_ingest(pdf, settings, lib)
+        assert lib.get_document(outcome.doc_id).status == DocumentStatus.PENDING

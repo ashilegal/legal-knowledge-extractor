@@ -86,6 +86,7 @@ def run_ingest(path: Path, settings: Settings, lib: Library) -> IngestOutcome:
 
     lib.upsert_document(Document(doc_id=doc_id, filename=path.name, source_path=str(path),
                                  page_count=result.page_count))
+    lib.set_document_status(doc_id, DocumentStatus.PENDING)     # read; LLM stages not run yet
     cp.done(doc_id, Stage.INGEST, output_path=pages_path)
 
     outcome.pages = result.page_count
@@ -106,7 +107,11 @@ def quarantine(path: Path, settings: Settings, reason: str) -> Path:
     target_dir = settings.path("quarantine")
     target_dir.mkdir(parents=True, exist_ok=True)
     target = target_dir / path.name
-    shutil.move(str(path), target)
+    try:
+        shutil.move(str(path), target)
+    except OSError as e:          # e.g. file locked by another program on Windows
+        shutil.copy2(path, target)
+        reason += f"\n(original could not be moved out of the inbox: {e})"
     (target_dir / f"{path.name}.error.txt").write_text(reason, encoding="utf-8")
     return target
 

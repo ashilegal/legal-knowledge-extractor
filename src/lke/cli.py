@@ -59,10 +59,16 @@ def run(
 ):
     """Process every PDF in the inbox. Safe to stop and run again: finished work is kept."""
     settings = _settings()
-    files = [f for f in scan_inbox(settings.path("inbox")) if only.lower() in f.name.lower()]
-    if not files:
+    inbox = scan_inbox(settings.path("inbox"))
+    files = [f for f in inbox if only.lower() in f.name.lower()]
+    if not inbox:
         console.print(f"No PDFs found in {settings.path('inbox')}")
         raise typer.Exit()
+    if not files:
+        console.print(f"No PDF in the inbox has '{only}' in its name. Files in the inbox:")
+        for f in inbox:
+            console.print(f"  {f.name}")
+        raise typer.Exit(1)
     if not dry_run and not (os.getenv("ANTHROPIC_API_KEY") or os.getenv("ANTHROPIC_AUTH_TOKEN")):
         console.print("[red]ANTHROPIC_API_KEY is not set.[/red] Add it to the .env file "
                       "(see .env.example), or use --dry-run.")

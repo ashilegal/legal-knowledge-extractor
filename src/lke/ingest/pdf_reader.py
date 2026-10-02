@@ -18,10 +18,13 @@ class UnreadablePdfError(Exception):
 
 
 def open_pdf(path: Path) -> pymupdf.Document:
+    # Open from bytes, not from the path: if the file is broken, PyMuPDF would otherwise
+    # keep it open and Windows could not move it to the quarantine folder.
+    data = path.read_bytes()
     try:
-        doc = pymupdf.open(path)
+        doc = pymupdf.open(stream=data, filetype="pdf")
     except Exception as e:  # PyMuPDF raises several error types for broken files
-        raise UnreadablePdfError(f"cannot open PDF: {e}") from e
+        raise UnreadablePdfError(f"cannot open PDF: {e}") from None
     if doc.needs_pass:
         doc.close()
         raise UnreadablePdfError("PDF is password protected")
