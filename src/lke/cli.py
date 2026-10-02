@@ -5,8 +5,8 @@ from rich.table import Table
 from lke import __version__
 from lke.config import load_settings
 from lke.ingest import scan_inbox
-from lke.pipeline.stages import run_ingest
-from lke.store import Checkpoint, Library
+from lke.pipeline.stages import run_ingest, run_structure
+from lke.store import Checkpoint, Library, Stage
 
 app = typer.Typer(help="Legal Knowledge Extractor")
 console = Console()
@@ -52,6 +52,29 @@ def ingest():
                           f"[{colour}]{o.status}[/{colour}]", o.message)
     console.print(table)
     console.print(f"Output: {settings.path('work')}")
+
+
+@app.command()
+def structure():
+    """Stages 2-3 only: detect topics/subtopics and split ingested PDFs into sections."""
+    settings = load_settings()
+    with Library(settings.path("library") / "library.db") as lib:
+        cp = Checkpoint(lib)
+        docs = [d for d in lib.list_documents()
+                if cp.is_done(d["doc_id"], Stage.INGEST)]
+        if not docs:
+            console.print("Nothing ingested yet. Run: lke ingest")
+            raise typer.Exit()
+        table = Table(title="Structure")
+        for col in ("file", "sections", "pages", "topics"):
+            table.add_column(col)
+        for d in docs:
+            sections = run_structure(d["doc_id"], settings, lib)
+            topics = sorted({s.topic_path[0] for s in sections if s.topic_path})
+            table.add_row(d["filename"], str(len(sections)), str(d["page_count"]),
+                          ", ".join(topics[:5]) + (" ..." if len(topics) > 5 else ""))
+    console.print(table)
+    console.print(f"Output: {settings.path('work')}/<doc_id>/sections.jsonl")
 
 
 @app.command()

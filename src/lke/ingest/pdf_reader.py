@@ -9,6 +9,9 @@ import pymupdf
 
 from lke.models import TextLine
 
+if hasattr(pymupdf, "no_recommend_layout"):      # silence an advert printed by find_tables
+    pymupdf.no_recommend_layout()
+
 
 class UnreadablePdfError(Exception):
     """The PDF is corrupt, encrypted or otherwise cannot be opened."""
@@ -49,6 +52,21 @@ def page_lines(page: pymupdf.Page, textpage: pymupdf.TextPage | None = None) -> 
             lines.append(TextLine(text=text, size=round(size, 1), bold=bool(bold),
                                   y=round(line["bbox"][1] / height, 3)))
     return lines
+
+
+def page_tables(page: pymupdf.Page) -> list[list[list[str]]]:
+    """Tables found on the page, as rows of cell strings. Empty list if none."""
+    try:
+        found = page.find_tables()
+    except Exception:                   # table detection is best-effort
+        return []
+    tables: list[list[list[str]]] = []
+    for table in found.tables:
+        rows = [[" ".join((cell or "").split()) for cell in row] for row in table.extract()]
+        rows = [r for r in rows if any(r)]
+        if len(rows) >= 2 and max(len(r) for r in rows) >= 2:
+            tables.append(rows)
+    return tables
 
 
 def image_coverage(page: pymupdf.Page) -> float:

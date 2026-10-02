@@ -40,17 +40,20 @@ class Page(BaseModel):
     is_ocr: bool = False
     ocr_confidence: float | None = None
     lines: list[TextLine] = Field(default_factory=list)
+    tables: list[list[list[str]]] = Field(default_factory=list)   # table -> rows -> cells
 
 
 class Section(BaseModel):
     section_id: str
     doc_id: str
+    index: int = 0                    # order within the document
     topic_path: list[str] = Field(default_factory=list)   # ["Employment Law", "Retrenchment"]
     title: str = ""
     page_start: int
     page_end: int
-    text: str
+    text: str                         # contains [[p. N]] markers where each page starts
     token_estimate: int = 0
+    has_tables: bool = False
 
     @property
     def topic(self) -> str | None:

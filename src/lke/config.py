@@ -25,10 +25,16 @@ class OcrConfig(BaseModel):
     language: str = "eng"
 
 
+class TablesConfig(BaseModel):
+    enabled: bool = True
+
+
 class SectioningConfig(BaseModel):
     target_tokens: int = 5000
     max_tokens: int = 8000
+    min_tokens: int = 300             # smaller sections are merged with their neighbours
     overlap_tokens: int = 200
+    max_heading_levels: int = 3
 
 
 class LlmConfig(BaseModel):
@@ -57,6 +63,7 @@ class Settings(BaseModel):
     paths: PathsConfig = Field(default_factory=PathsConfig)
     jurisdiction: str = "mixed"
     ocr: OcrConfig = Field(default_factory=OcrConfig)
+    tables: TablesConfig = Field(default_factory=TablesConfig)
     sectioning: SectioningConfig = Field(default_factory=SectioningConfig)
     llm: LlmConfig = Field(default_factory=LlmConfig)
     validation: ValidationConfig = Field(default_factory=ValidationConfig)

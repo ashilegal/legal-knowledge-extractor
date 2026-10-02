@@ -11,7 +11,7 @@ from lke.models import Page, TextLine
 TOP_EDGE = 0.10                # top 10% of the page can hold a header
 BOTTOM_EDGE = 0.90             # bottom 10% of the page can hold a footer
 REPEAT_SHARE = 0.3             # appears on >= 30% of pages -> header/footer
-MIN_PAGES_FOR_REPEATS = 4
+MIN_PAGES_FOR_REPEATS = 2
 
 _PAGE_NUMBER = re.compile(
     r"^\s*(?:page\s*)?[-–—(\[]?\s*(?:\d{1,5}|[ivxlcdm]{1,7})\s*[-–—)\]]?"
@@ -44,7 +44,7 @@ def find_repeated_edges(pages: list[list[TextLine]]) -> set[str]:
     counts: Counter[str] = Counter()
     for lines in pages:
         counts.update({_signature(l.text) for l in lines if is_edge(l) and l.text.strip()})
-    threshold = max(3, int(len(pages) * REPEAT_SHARE))
+    threshold = max(2, int(len(pages) * REPEAT_SHARE))
     return {sig for sig, n in counts.items() if n >= threshold}
 
 

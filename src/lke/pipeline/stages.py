@@ -9,8 +9,16 @@ from pathlib import Path
 from lke.config import Settings
 from lke.ingest import ingest_pdf, make_doc_id
 from lke.ingest.pdf_reader import UnreadablePdfError
-from lke.models import Document, DocumentStatus
-from lke.store import Checkpoint, Library, Stage, atomic_write_json, atomic_write_jsonl
+from lke.models import Document, DocumentStatus, Page, Section
+from lke.store import (
+    Checkpoint,
+    Library,
+    Stage,
+    atomic_write_json,
+    atomic_write_jsonl,
+    read_jsonl,
+)
+from lke.structure import build_tree, clean_title, find_headings, make_sections
 
 
 def work_dir(settings: Settings, doc_id: str) -> Path:
@@ -70,6 +78,7 @@ def run_ingest(path: Path, settings: Settings, lib: Library) -> IngestOutcome:
         "ocr_failed_pages": result.ocr_failed_pages,
         "low_quality_pages": result.low_quality_pages,
         "empty_pages": result.empty_pages,
+        "table_pages": result.table_pages,
         "total_chars": sum(p.char_count for p in result.pages),
         "warnings": sorted(set(result.warnings)),
     })
@@ -99,3 +108,47 @@ def quarantine(path: Path, settings: Settings, reason: str) -> Path:
     shutil.move(str(path), target)
     (target_dir / f"{path.name}.error.txt").write_text(reason, encoding="utf-8")
     return target
+
+
+def load_pages(settings: Settings, doc_id: str) -> list[Page]:
+    return [Page(**row) for row in read_jsonl(work_dir(settings, doc_id) / "pages.jsonl")]
+
+
+def load_sections(settings: Settings, doc_id: str) -> list[Section]:
+    return [Section(**row) for row in read_jsonl(work_dir(settings, doc_id) / "sections.jsonl")]
+
+
+def run_structure(doc_id: str, settings: Settings, lib: Library) -> list[Section]:
+    """Stages 2+3: pages -> topic tree (structure.json) -> sections (sections.jsonl)."""
+    cp = Checkpoint(lib)
+    if cp.is_done(doc_id, Stage.SECTION):
+        return load_sections(settings, doc_id)
+
+    cp.start(doc_id, Stage.STRUCTURE)
+    try:
+        doc = lib.get_document(doc_id)
+        pdf_path = Path(doc.source_path) if doc else None
+        doc_title = clean_title(Path(doc.filename).stem) if doc else doc_id
+        pages = load_pages(settings, doc_id)
+        cfg = settings.sectioning
+
+        source, headings = find_headings(pages, pdf_path, cfg.max_heading_levels)
+        tree = build_tree(doc_id, doc_title, headings)
+        sections = make_sections(doc_id, pages, headings, doc_title, cfg)
+    except Exception as e:
+        cp.failed(doc_id, Stage.STRUCTURE, f"{type(e).__name__}: {e}")
+        raise
+
+    out = work_dir(settings, doc_id)
+    atomic_write_json(out / "structure.json", {
+        "doc_id": doc_id,
+        "title": doc_title,
+        "heading_source": source,
+        "heading_count": len(headings),
+        "section_count": len(sections),
+        "tree": tree.to_dict(),
+    })
+    atomic_write_jsonl(out / "sections.jsonl", [s.model_dump() for s in sections])
+    cp.done(doc_id, Stage.STRUCTURE, output_path=out / "structure.json")
+    cp.done(doc_id, Stage.SECTION, output_path=out / "sections.jsonl")
+    return sections

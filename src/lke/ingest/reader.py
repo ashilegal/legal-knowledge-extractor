@@ -8,7 +8,7 @@ from pathlib import Path
 from lke.config import Settings
 from lke.ingest.cleaner import clean_pages
 from lke.ingest.ocr import OcrUnavailableError, needs_ocr, ocr_page, text_quality
-from lke.ingest.pdf_reader import iter_pages, open_pdf, page_lines
+from lke.ingest.pdf_reader import iter_pages, open_pdf, page_lines, page_tables
 from lke.models import Page
 
 LOW_OCR_QUALITY = 0.6
@@ -23,6 +23,7 @@ class IngestResult:
     ocr_failed_pages: list[int] = field(default_factory=list)
     low_quality_pages: list[int] = field(default_factory=list)
     empty_pages: list[int] = field(default_factory=list)
+    table_pages: list[int] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
 
 
@@ -57,9 +58,13 @@ def ingest_pdf(path: Path, doc_id: str, settings: Settings) -> IngestResult:
             elif not ocr_available and needs_ocr(page, text, ocr_cfg.min_chars_per_page):
                 result.ocr_failed_pages.append(number)
 
+            tables = page_tables(page) if settings.tables.enabled and not is_ocr else []
+            if tables:
+                result.table_pages.append(number)
+
             raw_pages.append(Page(
                 doc_id=doc_id, page_number=number, text=text, char_count=len(text),
-                is_ocr=is_ocr, ocr_confidence=quality, lines=lines,
+                is_ocr=is_ocr, ocr_confidence=quality, lines=lines, tables=tables,
             ))
 
     result.pages = clean_pages(raw_pages)

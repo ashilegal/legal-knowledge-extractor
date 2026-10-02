@@ -13,10 +13,15 @@ ocr:
   min_chars_per_page: 50     # below this, the page is treated as scanned
   language: eng
 
+tables:
+  enabled: true              # detect tables and keep their rows/columns
+
 sectioning:
-  target_tokens: 5000
-  max_tokens: 8000
-  overlap_tokens: 200
+  target_tokens: 5000        # preferred size of one section sent to the LLM
+  max_tokens: 8000           # bigger sections are split at paragraph boundaries
+  min_tokens: 300            # smaller sections are merged with neighbours
+  overlap_tokens: 200        # repeated text between split parts
+  max_heading_levels: 3
 
 llm:
   provider: anthropic
