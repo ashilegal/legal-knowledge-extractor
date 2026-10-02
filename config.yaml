@@ -1,0 +1,37 @@
+paths:
+  inbox: data/inbox
+  quarantine: data/quarantine
+  work: data/work
+  library: data/library
+  review: data/review
+  reports: data/reports
+
+jurisdiction: mixed          # india | us | uk | mixed
+
+ocr:
+  enabled: true
+  min_chars_per_page: 50     # below this, the page is treated as scanned
+  language: eng
+
+sectioning:
+  target_tokens: 5000
+  max_tokens: 8000
+  overlap_tokens: 200
+
+llm:
+  provider: anthropic
+  classify_model: claude-haiku-4-5-20251001
+  extract_model: claude-sonnet-5-5
+  max_retries: 3
+  max_concurrent_requests: 4
+  use_batch_api: false       # set to true for big overnight runs (cheaper)
+
+validation:
+  max_shared_word_run: 12    # this many consecutive words copied from the source = fail
+  max_ngram_overlap: 0.15    # share of 8-word sequences shared with the source
+  max_regenerate_attempts: 1
+  allow_statute_quotes: true
+  max_quote_words: 40
+
+batch:
+  parallel_documents: 2
