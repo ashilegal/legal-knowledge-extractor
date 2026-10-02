@@ -6,6 +6,7 @@ import shutil
 from dataclasses import dataclass
 from pathlib import Path
 
+from lke.classify import SectionClass, classify_section
 from lke.config import Settings
 from lke.ingest import ingest_pdf, make_doc_id
 from lke.ingest.pdf_reader import UnreadablePdfError
@@ -152,3 +153,22 @@ def run_structure(doc_id: str, settings: Settings, lib: Library) -> list[Section
     cp.done(doc_id, Stage.STRUCTURE, output_path=out / "structure.json")
     cp.done(doc_id, Stage.SECTION, output_path=out / "sections.jsonl")
     return sections
+
+
+def load_classes(settings: Settings, doc_id: str) -> dict[str, SectionClass]:
+    rows = read_jsonl(work_dir(settings, doc_id) / "classified.jsonl")
+    return {r["section_id"]: SectionClass(**r) for r in rows}
+
+
+def run_classify(doc_id: str, settings: Settings, lib: Library,
+                 sections: list[Section]) -> dict[str, SectionClass]:
+    """Stage 4: content types per section (free rules), written to classified.jsonl."""
+    cp = Checkpoint(lib)
+    if cp.is_done(doc_id, Stage.CLASSIFY):
+        return load_classes(settings, doc_id)
+    cp.start(doc_id, Stage.CLASSIFY)
+    classes = {s.section_id: classify_section(s) for s in sections}
+    path = work_dir(settings, doc_id) / "classified.jsonl"
+    atomic_write_jsonl(path, [c.model_dump() for c in classes.values()])
+    cp.done(doc_id, Stage.CLASSIFY, output_path=path)
+    return classes
