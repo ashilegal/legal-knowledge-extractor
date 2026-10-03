@@ -40,8 +40,8 @@ class SectioningConfig(BaseModel):
 class LlmConfig(BaseModel):
     provider: str = "ollama"                  # "ollama" (free, local) or "anthropic" (paid API)
     ollama_url: str = "http://localhost:11434"
-    ollama_model: str = "qwen2.5:7b"
-    ollama_context: int = 16384               # tokens the local model can read at once
+    ollama_model: str = "qwen2.5:14b"
+    ollama_context: int = 12288               # tokens the local model can read at once
     ollama_timeout: int = 1800                # seconds per call (local models can be slow)
     extract_model: str = "claude-opus-5-5"
     extract_effort: str = "medium"
@@ -63,7 +63,9 @@ class LlmConfig(BaseModel):
 class ValidationConfig(BaseModel):
     max_shared_word_run: int = 12
     max_ngram_overlap: float = 0.15
-    max_regenerate_attempts: int = 2
+    max_sentence_similarity: float = 0.85   # a record sentence this similar to a source sentence
+    max_regenerate_attempts: int = 1        # then HUMAN_REVIEW instead of rewording again
+    allow_interpretation: bool = False      # rule: no inferred / added statements
     allow_statute_quotes: bool = True
     max_quote_words: int = 40
 

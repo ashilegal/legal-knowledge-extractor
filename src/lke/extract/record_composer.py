@@ -90,7 +90,7 @@ COPIED_NOTE_RUN = 6         # a note sharing this many words in a row with the s
 
 
 def build_request(items: list[ExtractedItem], too_close: dict[str, list[str]] | None = None,
-                  source: SourceIndex | None = None) -> str:
+                  source: SourceIndex | None = None, allow_inferred: bool = False) -> str:
     """Only the extracted notes and identifiers go to the composer, never the source text."""
     lines = [
         "For every statement: use only the allowed fields of its item, and in \"facts\" copy "
@@ -107,13 +107,17 @@ def build_request(items: list[ExtractedItem], too_close: dict[str, list[str]] | 
             lines.append("Exact terms: " + "; ".join(exact))
         lines.append("Notes:")
         for f in item.facts:
+            if f.support == "inferred" and not allow_inferred:
+                continue
             note = f.note
             if source is not None and longest_run(note, source) >= COPIED_NOTE_RUN:
                 note = telegraphic(note)           # don't hand copied wording to the writer
             lines.append(f"- [{f.id}] ({f.fact_type.value}, {f.support}) {note}")
         if too_close and too_close.get(item.key):
-            lines.append("Phrases too close to the source in the previous attempt "
-                         "(reword these points):")
+            lines.append("REGENERATE: the previous version reproduced ordinary source wording. "
+                         "Write these points again as structured facts with a different "
+                         "sentence structure. Keep every legal term, name, number and fact "
+                         "exactly as it is; change only the ordinary wording:")
             lines += [f'- "{p}"' for p in too_close[item.key]]
         lines.append("")
     return "\n".join(lines)
@@ -127,7 +131,8 @@ def compose_records(items: list[ExtractedItem], settings: Settings, llm: JsonLLM
     data = llm.complete_json(
         model=settings.llm.compose_model,
         system=system_prompt(settings),
-        user=build_request(items, too_close, source),
+        user=build_request(items, too_close, source,
+                           settings.validation.allow_interpretation),
         schema=SCHEMA,
         effort=settings.llm.compose_effort,
     )
@@ -250,6 +255,8 @@ def build_record(section: Section, item: ExtractedItem, composed: ComposedRecord
             ids = resolve(st.facts, st.text)
             inferred = any(facts[f].support == "inferred" for f in ids)
             basis = Basis.INTERPRETATION.value if inferred else st.basis
+            if basis == Basis.INTERPRETATION.value and not settings.validation.allow_interpretation:
+                continue                       # rule: no inferred or added statements
             statements.setdefault(field, []).append(
                 {"text": st.text.strip(), "basis": basis, "evidence": evidence_ids(ids)})
         for ci in composed.comparison_items:

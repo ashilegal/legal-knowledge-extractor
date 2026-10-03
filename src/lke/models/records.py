@@ -68,6 +68,9 @@ class Flags(BaseModel):
 
 
 class ValidationResult(BaseModel):
+    status: str = ""                  # PASS | REGENERATE | HUMAN_REVIEW
+    similarity_score: float | None = None   # 0..1, closeness to the source wording
+    reason: str = ""
     schema_ok: bool | None = None
     grounding_ok: bool | None = None
     terms_ok: bool | None = None

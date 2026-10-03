@@ -1,4 +1,4 @@
-"""Runs all checks -> pass / regenerate / review."""
+"""Runs all checks -> PASS / REGENERATE / HUMAN_REVIEW."""
 
 from __future__ import annotations
 
@@ -13,7 +13,8 @@ from lke.validate.proprietary_check import check_proprietary
 from lke.validate.schema_check import check_schema
 from lke.validate.terms_check import check_terms
 
-PASS, REGENERATE, REVIEW = "pass", "regenerate", "review"
+PASS, REGENERATE, HUMAN_REVIEW = "PASS", "REGENERATE", "HUMAN_REVIEW"
+REVIEW = HUMAN_REVIEW
 
 
 @dataclass
@@ -30,8 +31,14 @@ class SectionContext:
     low_quality_pages: set[int] = field(default_factory=set)
 
     @classmethod
-    def build(cls, section: Section, low_quality_pages: set[int] | None = None):
-        return cls(section, SourceIndex(section.text), low_quality_pages or set())
+    def build(cls, section: Section, low_quality_pages: set[int] | None = None,
+              items: list[ExtractedItem] | None = None):
+        """items: the section's extracted items; their exact identifiers (names, parties,
+        defined terms) are excluded from the copying check like legal terms."""
+        exact = [i.value for item in items or [] for i in item.identifiers]
+        exact += [item.name for item in items or [] if item.record_type in ("CASE", "RULE",
+                                                                              "CONCEPT")]
+        return cls(section, SourceIndex(section.text, exact or None), low_quality_pages or set())
 
 
 def validate(record: AnyRecord, ctx: SectionContext, item: ExtractedItem | None,
@@ -50,11 +57,21 @@ def validate(record: AnyRecord, ctx: SectionContext, item: ExtractedItem | None,
     v.terms_ok = not term_errors
     v.overlap_max_run = overlap.max_run
     v.overlap_ratio = overlap.ratio
-    v.overlap_ok = overlap.ok(cfg.max_shared_word_run, cfg.max_ngram_overlap)
+    v.overlap_ok = overlap.ok(cfg.max_shared_word_run, cfg.max_ngram_overlap,
+                              cfg.max_sentence_similarity)
+    v.similarity_score = overlap.score
     errors += schema_errors + grounding_errors + term_errors
-    if not v.overlap_ok:
-        errors.append(f"wording too close to source (longest shared run {overlap.max_run} "
-                      f"words, {overlap.ratio:.0%} of 8-word sequences)")
+    copy_reasons = []
+    if overlap.max_run >= cfg.max_shared_word_run:
+        copy_reasons.append(f"{overlap.max_run} consecutive words of ordinary source wording "
+                            "reproduced")
+    if overlap.ratio > cfg.max_ngram_overlap:
+        copy_reasons.append(f"{overlap.ratio:.0%} of 8-word sequences match the source")
+    if overlap.sentence_similarity >= cfg.max_sentence_similarity:
+        copy_reasons.append(f"a source sentence is substantially reproduced "
+                            f"({overlap.sentence_similarity:.0%} similar)")
+    if copy_reasons:
+        errors.append("wording too close to source: " + "; ".join(copy_reasons))
     v.errors = errors + [f"warning: {w}" for w in grounding_warnings + term_warnings]
 
     flags = record.flags
@@ -67,9 +84,17 @@ def validate(record: AnyRecord, ctx: SectionContext, item: ExtractedItem | None,
 
     only_overlap = not (schema_errors or grounding_errors or term_errors) and not v.overlap_ok
     if only_overlap and attempt < cfg.max_regenerate_attempts:
-        return Verdict(REGENERATE, record, overlap.phrases)
+        v.status, v.reason = REGENERATE, "; ".join(copy_reasons)
+        phrases = overlap.phrases + ([overlap.copied_sentence] if overlap.copied_sentence
+                                     and overlap.sentence_similarity
+                                     >= cfg.max_sentence_similarity else [])
+        return Verdict(REGENERATE, record, phrases)
 
     review_reasons = errors + reasons
+    if not v.overlap_ok and attempt > 0:
+        review_reasons.append("still too similar after regeneration")
     flags.needs_review = bool(review_reasons)
     flags.reasons = list(dict.fromkeys(flags.reasons + review_reasons))
-    return Verdict(REVIEW if flags.needs_review else PASS, record)
+    v.status = HUMAN_REVIEW if flags.needs_review else PASS
+    v.reason = "; ".join(review_reasons)
+    return Verdict(v.status, record)

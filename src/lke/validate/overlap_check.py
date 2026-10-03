@@ -1,4 +1,4 @@
-"""Detects copied wording (n-gram, longest run)."""
+"""Detects copied wording (n-gram, longest run, sentence similarity)."""
 
 from lke.overlap import NGRAM, OverlapResult, SourceIndex, check_overlap, telegraphic
 

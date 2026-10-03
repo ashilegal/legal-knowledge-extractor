@@ -109,7 +109,7 @@ def process_section(section: Section, cls: SectionClass, settings: Settings, llm
             out.skipped_reason = facts.skipped_reason or "no items extracted"
             return out
 
-        ctx = SectionContext.build(section, low_pages)
+        ctx = SectionContext.build(section, low_pages, facts.items)
         pending = list(facts.items)
         raw_composed: dict = {}
         too_close: dict[str, list[str]] = {}

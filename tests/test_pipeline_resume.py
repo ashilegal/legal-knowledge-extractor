@@ -77,7 +77,20 @@ def test_full_run_builds_linked_library(tmp_path):
     from lke.store.html_report import export_html
     page = export_html(lib, tmp_path / "library.html").read_text(encoding="utf-8")
     assert "Prior written notice is a precondition." in page and "Original Pages: " in page
-    assert "Knowledge Record" in page and "Validated" in page
+    assert "Knowledge Record" in page and ">PASS<" in page
+
+    import json
+    from lke.store.knowledge_export import export_knowledge
+    out = json.loads(export_knowledge(lib, tmp_path / "k")[0].read_text(encoding="utf-8"))
+    first = out[0]
+    assert set(first) >= {"topic", "subtopic", "content_type", "title", "knowledge",
+                          "related_concepts", "related_cases", "source", "validation"}
+    assert first["content_type"] == "RULE"
+    assert first["knowledge"]["requirements"] == ["Prior written notice is a precondition."]
+    assert first["source"]["original_file"] == "labour.pdf"
+    assert first["source"]["page_start"] <= first["source"]["page_end"]
+    assert first["validation"]["status"] == "PASS"
+    assert isinstance(first["validation"]["similarity_score"], float)
     lib.close()
 
 

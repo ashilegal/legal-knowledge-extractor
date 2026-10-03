@@ -196,11 +196,15 @@ def _card(record: AnyRecord, names: dict[str, str], reasons: list[str] | None = 
                     f"Original Pages: {_page_ranges(list(pages))}")
     rows.append(("Source Reference", "<hr>".join(refs)))
 
+    score = record.validation.similarity_score
+    score_text = f" · similarity score {score:.2f}" if score is not None else ""
     if reasons:
-        status = ('<span class="review">Needs review</span><ul>'
+        status = (f'<span class="review">HUMAN_REVIEW</span>{score_text}<ul>'
                   + "".join(f"<li>{escape(r)}</li>" for r in reasons) + "</ul>")
     else:
-        status = '<span class="ok">Validated</span>'
+        approved = record.validation.status == "HUMAN_REVIEW"
+        status = (f'<span class="ok">PASS</span>{score_text}'
+                  + (" · approved by reviewer" if approved else ""))
         if record.flags.proprietary:
             status += " · contains author commentary (flagged)"
     rows.append(("Extraction Status", status))

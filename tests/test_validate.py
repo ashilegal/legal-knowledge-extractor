@@ -114,3 +114,36 @@ def test_copied_notes_are_reduced_before_composing():
     request = build_request([item], source=SourceIndex(SOURCE))
     assert "employee dismissed reporting misconduct superiors" in request
     assert "who was dismissed for reporting" not in request
+
+
+def test_legal_terms_of_art_are_not_copying():
+    index = SourceIndex("Res judicata and collateral estoppel require a final judgment on the "
+                        "merits and privity between the parties to the earlier proceeding.")
+    _, _, record = build()
+    record.fields.material_facts[0].text = (
+        "A final judgment on the merits is needed for res judicata and collateral estoppel.")
+    assert check_overlap(record, index).max_run < 6
+
+
+def test_reproduced_sentence_triggers_regenerate():
+    composed = copy.deepcopy(CASE_COMPOSED)
+    # same sentence as the source with a few words swapped: runs stay short, sentence matches
+    composed["records"][0]["statements"][0]["text"] = (
+        "The Cal. Supreme Court considered an employee who was let go for reporting misconduct "
+        "to his superiors and who later sued for wrongful termination in breach of public policy.")
+    section, item, record = build(composed)
+    verdict = validate(record, SectionContext.build(section), item, ValidationConfig())
+    assert verdict.decision == REGENERATE
+    assert record.validation.status == "REGENERATE"
+    assert "substantially reproduced" in record.validation.reason
+    final = validate(record, SectionContext.build(section), item, ValidationConfig(), attempt=1)
+    assert final.decision == "HUMAN_REVIEW"
+    assert "still too similar after regeneration" in record.validation.reason
+    assert record.validation.similarity_score >= 0.85
+
+
+def test_pass_has_status_and_score():
+    section, item, record = build()
+    validate(record, SectionContext.build(section), item, ValidationConfig())
+    assert record.validation.status == "PASS" and record.validation.reason == ""
+    assert record.validation.similarity_score < 0.5

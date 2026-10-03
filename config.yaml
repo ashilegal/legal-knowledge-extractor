@@ -26,8 +26,8 @@ sectioning:
 llm:
   provider: ollama                   # ollama = free model on this computer; anthropic = paid API
   ollama_url: http://localhost:11434
-  ollama_model: qwen2.5:7b           # see README for which model suits your RAM
-  ollama_context: 16384
+  ollama_model: qwen2.5:14b          # 16 GB RAM; use qwen2.5:7b for 8-12 GB
+  ollama_context: 12288
   ollama_timeout: 1800
   # --- used only when provider is anthropic ---
   extract_model: claude-opus-5-5     # pass 1: section -> facts
@@ -48,7 +48,9 @@ llm:
 validation:
   max_shared_word_run: 12    # this many consecutive words copied from the source = fail
   max_ngram_overlap: 0.15    # share of 8-word sequences shared with the source
-  max_regenerate_attempts: 2
+  max_sentence_similarity: 0.85   # a sentence this similar to a source sentence = reproduced
+  max_regenerate_attempts: 1      # regenerate once, then HUMAN_REVIEW
+  allow_interpretation: false     # keep only facts stated in the source (no inferences)
   allow_statute_quotes: true
   max_quote_words: 40
 

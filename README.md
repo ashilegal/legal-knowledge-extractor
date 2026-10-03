@@ -2,7 +2,10 @@
 
 Turns large collections of legal PDFs into a searchable library of **independently worded,
 structured knowledge records** (cases, concepts, rules, examples and comparisons). Every record
-is traceable to its source document and pages. The library holds no copy or paraphrase of the source.
+is traceable to its source document and pages.
+
+> This is a technical method for avoiding unnecessary reproduction of the source's original
+> expression. It is **not** a legal guarantee: records are not automatically "copyright-free".
 
 ```
 PDF folder → text / OCR → topics & sections → content types → facts (LLM pass 1)
@@ -28,9 +31,8 @@ than the paid API.
 
    | RAM | Command | `ollama_model` in config.yaml |
    |---|---|---|
-   | 8 GB | `ollama pull qwen2.5:3b` | `qwen2.5:3b` |
-   | 16 GB | `ollama pull qwen2.5:7b` | `qwen2.5:7b` (default) |
-   | 32 GB+ | `ollama pull qwen2.5:14b` | `qwen2.5:14b` |
+   | 8–12 GB | `ollama pull qwen2.5:7b` | `qwen2.5:7b` |
+   | 16 GB+ | `ollama pull qwen2.5:14b` | `qwen2.5:14b` (default) |
 
 **Paid: the Anthropic API** (better quality, faster). Set `provider: anthropic` in
 `config.yaml`, copy `.env.example` to `.env` and put your API key there. With the API you can
@@ -77,12 +79,32 @@ Each run writes a summary to `data/reports/run-<time>.md`.
 | 7. Validation (see below) | `validate/` | pass / reword / review | no |
 | 8. Merge same case/rule across documents, entities, relationships | `link/` | `data/library/library.db` | no |
 
+### Output format
+
+`lke export` (and `lke open`) write `data/library/export/knowledge_records.json`:
+
+```json
+{
+  "topic": "", "subtopic": "", "content_type": "CASE", "title": "",
+  "knowledge": { "case_name": "", "court": "", "year": "", "material_facts": [], "...": "" },
+  "related_concepts": [], "related_cases": [],
+  "source": { "document_id": "", "original_file": "", "page_start": 0, "page_end": 0 },
+  "validation": { "status": "PASS | REGENERATE | HUMAN_REVIEW", "similarity_score": 0.0, "reason": "" }
+}
+```
+
+`similarity_score` (0–1) is the larger of: the share of the record's 8-word sequences found in
+the source, and the similarity of its closest sentence to a source sentence.
+
 ### Safeguards
 
 - **No copying:** the record writer never sees the source text. Each record is then compared
-  with its section: if it shares a run of ≥ 12 words, or more than 15 % of its 8-word sequences,
-  it is reworded once and otherwise sent to review. Legal identifiers are excluded from this
-  check because they are supposed to match.
+  with its section. It is marked REGENERATE if it reproduces 12+ consecutive words of ordinary
+  source wording, more than 15 % of its 8-word sequences, or a whole source sentence (≥ 85 %
+  similar). It is regenerated **once**; if it is still too similar it goes to HUMAN_REVIEW.
+  Case names, parties, courts, statutes, section numbers, dates, defined terms and legal terms
+  of art never count as copying, and are never changed to lower the score.
+- **No inferences:** only facts stated in the source are kept (`allow_interpretation: false`).
 - **Legal terms kept exact:** case names, citations, courts, statutes and provisions come from
   pass 1 *as written* and are copied into records by code. Any identifier that does not occur in
   the source is treated as possibly invented, and the record goes to review.

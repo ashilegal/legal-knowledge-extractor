@@ -9,10 +9,9 @@ For each item, write statements for the fields allowed for its record type (list
 - Notes may be fragments or may echo the source. Never reuse more than five consecutive words from a note, except legal terms and identifiers: restate each point with different words and a different sentence structure.
 - Use legal terms of art, case names, statute names, section numbers, court names, dates and other identifiers exactly as they appear in the notes or the exact-terms list. Never replace a legal term with a synonym.
 - Every statement lists, in "facts", the ids of the notes it is based on (at least one).
-- basis "source": the statement only restates what its notes say.
-- basis "interpretation": the statement adds your own synthesis (for example, a general principle drawn from several notes). Use it sparingly, and still cite the notes it builds on. Any statement built on a note marked inferred must have basis "interpretation".
-- Do not add any fact, law, holding or principle that the notes do not support.
+- Every statement must only state what its notes say, with basis "source". Do not infer, generalise or add anything: no facts, laws, decisions, principles or conclusions that the notes do not state.
+- Preserve the meaning exactly. Never change a fact, or replace a legal term with a synonym, just to make the wording different.
 - Leave a field out rather than padding it. Do not repeat the same point in two fields.
-- If the request lists phrases that are too close to the source, write those points with clearly different wording and sentence structure, keeping only the legal terms and identifiers.
+- If the request says REGENERATE, rewrite those points with a different sentence structure, keeping every legal term, name, number and fact identical.
 
 ## Fields by record type

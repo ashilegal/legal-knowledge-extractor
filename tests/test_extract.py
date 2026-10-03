@@ -1,3 +1,4 @@
+import copy
 from types import SimpleNamespace
 
 import anthropic
@@ -50,11 +51,20 @@ def test_two_pass_extraction_builds_grounded_case(tmp_path):
     assert f.date.precision == "year"
     assert f.laws[0].provision == "Lab.C. § 3600" and f.laws[0].statute == "Labor Code"
     assert f.decision.text.startswith("The wrongful termination claim")
-    assert f.principles[0].basis == Basis.INTERPRETATION       # built on an inferred note
+    assert all(p.basis == Basis.SOURCE for p in f.principles)   # rule 5: no inferences
+    assert not any("workplace risks" in p.text for p in f.principles)
     assert record.topic.name == "Workers' Compensation"
     assert record.subtopic.name == "Exclusivity"
-    assert record.pages == [3, 4]                               # page 99 is outside the section
+    assert record.pages == [3]                                  # page 99 is outside the section
+
     assert {e.doc_id for e in record.evidence} == {"doc_1"}
+
+
+def test_interpretation_kept_only_when_allowed(tmp_path):
+    settings = Settings(root=tmp_path)
+    settings.validation.allow_interpretation = True
+    _, _, (records, _) = run_pipeline(settings, FakeLLM(CASE_FACTS, CASE_COMPOSED))
+    assert any(p.basis == Basis.INTERPRETATION for p in records[0].fields.principles)
 
 
 def test_composer_never_sees_source_text(tmp_path):
@@ -209,7 +219,9 @@ def test_local_model_quirks_are_tolerated(tmp_path):
             {"field": "key_points", "text": "Exclusivity is limited to workplace risks.",
              "basis": "source", "facts": []},
         ]}]}
-    _, _, (records, errors) = run_pipeline(settings, FakeLLM(CASE_FACTS, composed))
+    facts = copy.deepcopy(CASE_FACTS)
+    facts["items"][0]["facts"][2]["support"] = "explicit"
+    _, _, (records, errors) = run_pipeline(settings, FakeLLM(facts, composed))
     assert errors == []
     f = records[0].fields
     assert f.material_facts[0].evidence == ["sec_1:f1"]

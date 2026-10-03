@@ -56,7 +56,9 @@ class OllamaLLM:
             "options": {
                 "temperature": 0,
                 "num_ctx": self.cfg.ollama_context,
-                "num_predict": max_tokens or self.cfg.max_output_tokens,
+                # output must fit in the context window together with the input
+                "num_predict": min(max_tokens or self.cfg.max_output_tokens,
+                                   self.cfg.ollama_context // 2),
             },
         }
         with self._slots:

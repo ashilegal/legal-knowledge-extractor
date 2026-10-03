@@ -20,6 +20,7 @@ from lke.pipeline.stages import run_ingest, run_structure
 from lke.store import Checkpoint, Library, Stage
 from lke.store.exporter import export_csv, export_jsonl
 from lke.store.html_report import export_html
+from lke.store.knowledge_export import export_knowledge
 
 app = typer.Typer(help="Legal Knowledge Extractor: PDFs -> structured, searchable knowledge "
                        "records.", no_args_is_help=True)
@@ -263,12 +264,12 @@ def search(query: str, limit: int = 20,
 @app.command()
 def export(out: Path = typer.Option(None, help="Folder (default: data/library/export)."),
            csv: bool = typer.Option(True, help="Also write records.csv for Excel.")):
-    """Export the library: library.html (to read), JSONL (records, relations, topics), CSV."""
+    """Export: knowledge_records.json (agreed format), library.html (to read), JSONL, CSV."""
     settings = _settings()
     folder = out or settings.path("library") / "export"
     with Library(library_path(settings)) as lib:
         html = export_html(lib, folder / "library.html")
-        paths = export_jsonl(lib, folder)
+        paths = export_knowledge(lib, folder) + export_jsonl(lib, folder)
         if csv:
             paths.append(export_csv(lib, folder / "records.csv"))
     for p in paths:
@@ -281,9 +282,12 @@ def open_library_page():
     """Create library.html and open it in your web browser."""
     import webbrowser
     settings = _settings()
+    folder = settings.path("library") / "export"
     with Library(library_path(settings)) as lib:
-        html = export_html(lib, settings.path("library") / "export" / "library.html")
+        html = export_html(lib, folder / "library.html")
+        export_knowledge(lib, folder)
     console.print(f"Opening {html}")
+    console.print(f"JSON records: {folder / 'knowledge_records.json'}")
     webbrowser.open(html.resolve().as_uri())
 
 
@@ -355,6 +359,7 @@ def review_approve(review_id: str):
             raise typer.Exit(1)
         record = parse_record(row["data"])
         record.flags.needs_review = False
+        record.validation.status = "HUMAN_REVIEW"       # exported as PASS, approved by reviewer
         store_record(record, lib)
         lib.set_review_status(review_id, "approved")
         console.print(f"Approved -> {record.record_id}")

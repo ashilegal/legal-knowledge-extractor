@@ -27,7 +27,7 @@ Return a list of items. Each item is one knowledge unit of exactly one type:
   - fact_type: fact | issue | holding | principle | definition | requirement | condition | exception | factor | scenario | result | attribute | metadata
     (use "attribute" for one subject/attribute/value point of a comparison or table, written as "subject — attribute: value")
   - pages: the page number(s) where the information appears. Read them from the [[p. N]] markers: text belongs to the nearest marker above it.
-  - support: "explicit" if the text states it; "inferred" if it is your reasonable reading but not stated in the text.
+  - support: "explicit" when the text states it. Only include points the text states; use "inferred" only if a point is unavoidable to understand the item (such notes are not used in records).
   - proprietary: true if the point is the author's own advice, practice tip, opinion, strategy or an original illustrative example, rather than law or fact.
 - related: other cases, concepts, rules or statutes that the text links to this item.
   - name: as written; type: CASE | CONCEPT | RULE | STATUTE; relation: cites | applies | interprets | establishes | illustrates | distinguishes | overrules | compares | defines | related_to
@@ -37,7 +37,8 @@ Return a list of items. Each item is one knowledge unit of exactly one type:
 
 ## Rules
 
-- Never invent facts, laws, holdings, decisions or principles. Prefer explicit support; mark anything else as inferred.
+- Never invent, infer or add facts, laws, holdings, decisions, principles or conclusions. Extract only what the text states.
+- Do not summarise or paraphrase the text sentence by sentence: break it into separate facts.
 - Cover all substantive legal content in the section. Ignore navigation (cross-references such as "see ¶ 3:113"), page furniture and lists of sources.
 - A case that is only cited as authority, with no facts or holding explained, is not a CASE item: list it under related for the item it supports.
 - Do not merge different cases into one item. Do not split one case into several items.
