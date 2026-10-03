@@ -58,79 +58,158 @@ ul.st { margin:4px 0 0; padding-left:20px; } ul.st li { margin:3px 0; }
 .reasons { color:var(--warn); font:13px system-ui, sans-serif; margin:6px 0 0; }
 table { border-collapse:collapse; width:100%; font:13px system-ui, sans-serif; margin-top:6px; }
 td, th { border:1px solid var(--line); padding:4px 6px; text-align:left; }
-@media print { body { background:#fff; } .card { border-color:#ccc; } }
+.record { background:var(--card); border:1px solid var(--line); border-radius:8px;
+          margin:18px 0; overflow:hidden; break-inside:avoid; }
+.record-head { background:var(--accent); color:var(--card); font:600 15px system-ui, sans-serif;
+               padding:8px 14px; display:flex; justify-content:space-between; }
+.record-head span { font-weight:400; font-size:12px; opacity:.85; }
+table.kr { width:100%; margin:0; font:14px/1.5 Georgia, serif; }
+table.kr th { width:30%; vertical-align:top; background:transparent; color:var(--muted);
+              font:600 13px system-ui, sans-serif; border:0; border-bottom:1px solid var(--line);
+              padding:8px 12px; }
+table.kr td { border:0; border-bottom:1px solid var(--line); padding:8px 12px; }
+table.kr tr:last-child th, table.kr tr:last-child td { border-bottom:0; }
+table.kr ul { margin:0; padding-left:18px; } table.kr li { margin:2px 0; }
+table.kr table td, table.kr table th { border:1px solid var(--line); }
+.none { color:var(--muted); font-style:italic; }
+.interp { color:var(--int); font:italic 12px system-ui, sans-serif; }
+.quote { color:var(--muted); font-style:italic; margin-top:2px; }
+.ok { color:var(--src); font-weight:600; } .review { color:var(--warn); font-weight:600; }
+hr { border:0; border-top:1px dashed var(--line); margin:6px 0; }
+@media (max-width:600px) { table.kr th { width:38%; } }
+@media print { body { background:#fff; } .record { border-color:#999; }
+  .record-head { color:#000; background:#eee; } }
 """
 
 
-def _statement(st: Statement) -> str:
-    basis = st.basis.value
-    label = "from source" if basis == "source" else "interpretation"
-    return f'<li>{escape(st.text)}<span class="tag {basis}">{label}</span></li>'
+NOT_STATED = '<span class="none">Not stated in the source</span>'
+
+# Field order for each record type, exactly as shown on the page.
+LAYOUT = {
+    "CASE": [("Case Name", "case_name"), ("Court", "court"), ("Year", "year"),
+             ("Citation", "citation"), ("Parties", "parties"),
+             ("Material Facts", "material_facts"), ("Legal Issue", "legal_issues"),
+             ("Relevant Law", "laws"), ("Decision / Outcome", "decision"),
+             ("Key Legal Principles", "principles"), ("Important Factors", "important_factors"),
+             ("Related Concepts", "related_concepts"), ("Related Cases", "related_cases")],
+    "CONCEPT": [("Concept Name", "concept_name"), ("Definition", "definition"),
+                ("Key Points", "key_points"), ("Important Factors", "important_factors"),
+                ("Related Concepts", "related_concepts"), ("Related Cases", "related_cases")],
+    "RULE": [("Rule / Law Name", "rule_name"), ("Relevant Provision / Section", "provisions"),
+             ("Requirements", "requirements"), ("Conditions", "conditions"),
+             ("Exceptions", "exceptions"), ("Related Concepts", "related_concepts"),
+             ("Related Cases", "related_cases")],
+    "EXAMPLE": [("Scenario", "scenario"), ("Concept Illustrated", "concept_illustrated"),
+                ("Important Facts", "important_facts"), ("Result / Conclusion", "result"),
+                ("Related Concepts", "related_concepts")],
+    "COMPARISON": [("Title", "title"), ("Compared", "subjects"), ("Comparison", "items"),
+                   ("Key Differences", "key_differences"),
+                   ("Related Concepts", "related_concepts")],
+}
 
 
-def _pages(record: AnyRecord, names: dict[str, str]) -> str:
-    by_doc: dict[str, set[int]] = defaultdict(set)
-    for ev in record.evidence:
-        by_doc[ev.doc_id].update(ev.pages)
-    parts = [f"{escape(names.get(d, d))}, p. {', '.join(map(str, sorted(p)))}"
-             for d, p in by_doc.items()]
-    return "Source: " + "; ".join(parts)
+def _bullets(items: list[str]) -> str:
+    return "<ul>" + "".join(f"<li>{i}</li>" for i in items) + "</ul>"
 
 
-def _card(record: AnyRecord, names: dict[str, str], reasons: list[str] | None = None) -> str:
+def _statement_html(st: Statement) -> str:
+    text = escape(st.text)
+    if st.basis.value == "interpretation":
+        text += ' <span class="interp">(interpretation)</span>'
+    return text
+
+
+def _page_ranges(pages: list[int]) -> str:
+    """[425, 426, 427, 431] -> '425–427, 431'"""
+    out, start, prev = [], None, None
+    for p in sorted(set(pages)):
+        if start is None:
+            start = prev = p
+        elif p == prev + 1:
+            prev = p
+        else:
+            out.append(f"{start}–{prev}" if prev != start else str(start))
+            start = prev = p
+    if start is not None:
+        out.append(f"{start}–{prev}" if prev != start else str(start))
+    return ", ".join(out)
+
+
+def _value(record: AnyRecord, key: str) -> str:
     f = record.fields
-    out = [f'<div class="card" id="{record.record_id}">',
-           f'<h4><span class="badge">{TYPE_NAMES[record.record_type]}</span>'
-           f'{escape(record_title(record))}</h4>']
-    if record.flags.proprietary:
-        out[-1] = out[-1].replace("</h4>", '<span class="badge flag">author commentary</span></h4>')
-    facts = []
-    if record.record_type == "CASE":
-        for label, value in (("Citation", f.citation), ("Court", f.court),
-                             ("Date", f.date.value if f.date else None)):
-            if value:
-                facts.append((label, value))
-        if f.parties:
-            facts.append(("Parties", "; ".join(
-                f"{p.name}{f' ({p.role})' if p.role else ''}" for p in f.parties)))
-    laws = getattr(f, "laws", None) or getattr(f, "provisions", None) or []
-    if laws:
-        facts.append(("Law", "; ".join(" ".join(x for x in (l.provision, l.statute) if x)
-                                        for l in laws)))
-    for law in laws:
-        if law.quoted_provision:
-            facts.append(("Quoted text", f"“{law.quoted_provision}”"))
-    if record.topic:
-        facts.append(("Topic", record.topic.name + (f" › {record.subtopic.name}"
-                                                    if record.subtopic else "")))
-    if facts:
-        out.append("<dl>" + "".join(f"<dt>{escape(k)}</dt><dd>{escape(str(v))}</dd>"
-                                    for k, v in facts) + "</dl>")
-    for name, label in LABELS.items():
-        value = getattr(f, name, None)
-        items = [value] if isinstance(value, Statement) else (value or [])
-        items = [s for s in items if isinstance(s, Statement)]
-        if items:
-            out.append(f'<div class="field"><b>{label}</b><ul class="st">'
-                       + "".join(_statement(s) for s in items) + "</ul></div>")
-    if record.record_type == "COMPARISON" and f.items:
+    if key == "year":
+        return escape(f.date.value[:4]) if f.date else NOT_STATED
+    if key == "parties":
+        return _bullets([escape(f"{p.name}{f' ({p.role})' if p.role else ''}")
+                         for p in f.parties]) if f.parties else NOT_STATED
+    if key in ("laws", "provisions"):
+        laws = getattr(f, key) or []
+        items = []
+        for law in laws:
+            line = escape(", ".join(x for x in (law.provision, law.statute) if x))
+            if law.quoted_provision:
+                line += f'<div class="quote">“{escape(law.quoted_provision)}” (exact quote)</div>'
+            items.append(line)
+        return _bullets(items) if items else NOT_STATED
+    if key == "related_cases":
+        names = [escape(r.name) for r in f.related if r.type == "CASE"]
+        return _bullets(names) if names else NOT_STATED
+    if key == "related_concepts":
+        names = [escape(r.name) for r in f.related if r.type != "CASE"]
+        return _bullets(names) if names else NOT_STATED
+    if key in ("concept_illustrated", "subjects"):
+        values = getattr(f, key) or []
+        return _bullets([escape(v) for v in values]) if values else NOT_STATED
+    if key == "items":
         rows = "".join(f"<tr><td>{escape(i.subject)}</td><td>{escape(i.attribute)}</td>"
                        f"<td>{escape(i.value)}</td></tr>" for i in f.items
                        if isinstance(i, ComparisonItem))
-        out.append("<table><tr><th>Subject</th><th>Aspect</th><th>Value</th></tr>"
-                   f"{rows}</table>")
-    if record.record_type == "EXAMPLE" and f.concept_illustrated:
-        out.append(f'<div class="field"><b>Illustrates</b> '
-                   f'{escape(", ".join(f.concept_illustrated))}</div>')
-    if f.related:
-        out.append(f'<div class="field"><b>Related</b> '
-                   f'{escape("; ".join(r.name for r in f.related))}</div>')
-    out.append(f'<div class="pages">{_pages(record, names)}</div>')
+        return ("<table><tr><th>Subject</th><th>Aspect</th><th>Value</th></tr>"
+                f"{rows}</table>") if rows else NOT_STATED
+    value = getattr(f, key, None)
+    if isinstance(value, Statement):
+        return _statement_html(value)
+    if isinstance(value, list):
+        items = [_statement_html(v) for v in value if isinstance(v, Statement)]
+        if len(items) == 1 and key == "legal_issues":
+            return items[0]
+        return _bullets(items) if items else NOT_STATED
+    return escape(str(value)) if value else NOT_STATED
+
+
+def _card(record: AnyRecord, names: dict[str, str], reasons: list[str] | None = None,
+          review_id: str | None = None) -> str:
+    rows: list[tuple[str, str]] = [
+        ("Topic", escape(record.topic.name) if record.topic else NOT_STATED),
+        ("Subtopic", escape(record.subtopic.name) if record.subtopic else NOT_STATED),
+        ("Content Type", TYPE_NAMES[record.record_type]),
+    ]
+    rows += [(label, _value(record, key)) for label, key in LAYOUT[record.record_type]]
+
+    by_doc: dict[str, set[int]] = defaultdict(set)
+    for ev in record.evidence:
+        by_doc[ev.doc_id].update(ev.pages)
+    refs = []
+    for doc_id, pages in by_doc.items():
+        refs.append(f"Document ID: {escape(doc_id)}<br>"
+                    f"Document: {escape(names.get(doc_id, ''))}<br>"
+                    f"Original Pages: {_page_ranges(list(pages))}")
+    rows.append(("Source Reference", "<hr>".join(refs)))
+
     if reasons:
-        out.append('<div class="reasons">Why it is waiting for review: '
-                   + escape("; ".join(reasons)) + "</div>")
-    out.append("</div>")
-    return "\n".join(out)
+        status = ('<span class="review">Needs review</span><ul>'
+                  + "".join(f"<li>{escape(r)}</li>" for r in reasons) + "</ul>")
+    else:
+        status = '<span class="ok">Validated</span>'
+        if record.flags.proprietary:
+            status += " · contains author commentary (flagged)"
+    rows.append(("Extraction Status", status))
+
+    body = "".join(f"<tr><th>{label}</th><td>{value}</td></tr>" for label, value in rows)
+    return (f'<section class="record" id="{record.record_id}">'
+            f'<div class="record-head">Knowledge Record<span>{review_id or record.record_id}'
+            f'</span></div>'
+            f"<table class=\"kr\">{body}</table></section>")
 
 
 def export_html(lib: Library, path: Path, include_review: bool = True) -> Path:
@@ -145,7 +224,8 @@ def export_html(lib: Library, path: Path, include_review: bool = True) -> Path:
     reviews = []
     if include_review:
         for row in lib.list_reviews("pending"):
-            reviews.append((parse_record(row["data"]), json.loads(row["reasons"])))
+            reviews.append((parse_record(row["data"]), json.loads(row["reasons"]),
+                            row["review_id"]))
 
     html = ["<!doctype html><html lang='en'><head><meta charset='utf-8'>",
             "<meta name='viewport' content='width=device-width, initial-scale=1'>",
@@ -154,9 +234,9 @@ def export_html(lib: Library, path: Path, include_review: bool = True) -> Path:
             f"<p class='meta'>{len(records)} records from {len(names)} document(s) · "
             f"{len(reviews)} waiting for review · generated "
             f"{datetime.now():%d %b %Y %H:%M}</p>",
-            "<p class='meta'>Statements are written independently from the source documents. "
-            "“from source” = supported by the cited pages; “interpretation” = "
-            "the system's own synthesis.</p>"]
+            "<p class='meta'>Statements are written independently from the source documents and "
+            "are supported by the cited pages; statements marked “(interpretation)” are the "
+            "system's own synthesis.</p>"]
     if groups:
         html.append("<ul class='toc'>")
         for n, topic in enumerate(sorted(groups)):
@@ -179,8 +259,8 @@ def export_html(lib: Library, path: Path, include_review: bool = True) -> Path:
         html.append("<h2 id='review'>Waiting for review</h2>")
         html.append("<p class='meta'>Not yet in the library. Approve with "
                     "<code>lke review approve &lt;review_id&gt;</code>.</p>")
-        for record, reasons in reviews:
-            html.append(_card(record, names, reasons))
+        for record, reasons, review_id in reviews:
+            html.append(_card(record, names, reasons, review_id))
     if not records and not reviews:
         html.append("<p>The library is empty. Run <code>lke run</code> first.</p>")
     html.append("</main></body></html>")
