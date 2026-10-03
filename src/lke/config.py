@@ -63,7 +63,7 @@ class LlmConfig(BaseModel):
 class ValidationConfig(BaseModel):
     max_shared_word_run: int = 12
     max_ngram_overlap: float = 0.15
-    max_regenerate_attempts: int = 1
+    max_regenerate_attempts: int = 2
     allow_statute_quotes: bool = True
     max_quote_words: int = 40
 

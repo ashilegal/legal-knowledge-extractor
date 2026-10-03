@@ -21,7 +21,7 @@ def _record_identifiers(record: AnyRecord) -> list[tuple[str, str]]:
     if record.record_type == "CASE":
         out.append(("case_name", f.case_name))
         if f.citation:
-            out += [("citation", c.strip()) for c in f.citation.split(";") if c.strip()]
+            out += [("citation", c.strip()) for c in re.split(r"[;,]", f.citation) if c.strip()]
         if f.court:
             out.append(("court", f.court))
         out += [("party", p.name) for p in f.parties]
@@ -32,6 +32,23 @@ def _record_identifiers(record: AnyRecord) -> list[tuple[str, str]]:
             out.append(("provision", law.provision))
     out += [("case_name", r.name) for r in f.related if r.type == "CASE"]
     return out
+
+
+_SECTION_SPLIT = re.compile(r"^(.*?§+)\s*([\d.]+[A-Za-z]*)")
+
+
+def _in_section_list(value: str, source_text: str) -> bool:
+    """'42 USC § 1981' is supported by a source that says '42 USC §§ 1981, 1983 and 1985'."""
+    m = _SECTION_SPLIT.match(value.strip())
+    if not m:
+        return False
+    code, number = _loose(m.group(1).rstrip("§ ")), m.group(2)
+    loose = source_text.lower()
+    for hit in re.finditer(re.escape(number), loose):
+        window = _loose(loose[max(0, hit.start() - 80):hit.start()])
+        if code and code in window:
+            return True
+    return False
 
 
 def check_terms(record: AnyRecord, source_text: str, item: ExtractedItem | None
@@ -47,6 +64,8 @@ def check_terms(record: AnyRecord, source_text: str, item: ExtractedItem | None
             continue
         lookup_kind = kind if kind != "party" else "case_name"
         if key(lookup_kind, value) in source_keys or _loose(value) in loose_source:
+            continue
+        if kind in ("provision", "statute") and _in_section_list(value, source_text):
             continue
         errors.append(f"{kind} not found in source: '{value}'")
 

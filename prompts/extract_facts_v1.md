@@ -22,7 +22,7 @@ Return a list of items. Each item is one knowledge unit of exactly one type:
   - role: for a party, its role (appellant, respondent, plaintiff, defendant, insurer, employer ...); for a provision, the statute or code it belongs to if the text says so; otherwise ""
   - pages: page numbers where it appears
 - facts: the information, as short notes.
-  - One point per note, at most 25 words, in your own neutral wording. Telegraphic style is fine ("no notice given before retrenchment").
+  - One point per note, at most 20 words, written as a keyword fragment, not a sentence ("unreviewed arbitration award — not preclusive in later suit"; "no notice given before retrenchment").
   - Never copy sentences or distinctive phrases from the text. Keep only legal terms of art, names and identifiers exactly as written.
   - fact_type: fact | issue | holding | principle | definition | requirement | condition | exception | factor | scenario | result | attribute | metadata
     (use "attribute" for one subject/attribute/value point of a comparison or table, written as "subject — attribute: value")

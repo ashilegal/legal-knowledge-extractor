@@ -14,6 +14,7 @@ from lke.extract.llm_client import JsonLLM
 from lke.extract.prompts import load_prompt
 from lke.extract.table_extractor import subjects_and_dimensions
 from lke.models import AnyRecord, Section, make_id, parse_record
+from lke.overlap import SourceIndex, longest_run, telegraphic
 from lke.models.records import Basis, ComparisonItem
 from lke.terms import key as term_key
 from lke.terms import normalise
@@ -85,8 +86,11 @@ def system_prompt(settings: Settings) -> str:
     return "\n\n".join(parts)
 
 
-def build_request(items: list[ExtractedItem], too_close: dict[str, list[str]] | None = None
-                  ) -> str:
+COPIED_NOTE_RUN = 6         # a note sharing this many words in a row with the source is reduced
+
+
+def build_request(items: list[ExtractedItem], too_close: dict[str, list[str]] | None = None,
+                  source: SourceIndex | None = None) -> str:
     """Only the extracted notes and identifiers go to the composer, never the source text."""
     lines = [
         "For every statement: use only the allowed fields of its item, and in \"facts\" copy "
@@ -103,7 +107,10 @@ def build_request(items: list[ExtractedItem], too_close: dict[str, list[str]] | 
             lines.append("Exact terms: " + "; ".join(exact))
         lines.append("Notes:")
         for f in item.facts:
-            lines.append(f"- [{f.id}] ({f.fact_type.value}, {f.support}) {f.note}")
+            note = f.note
+            if source is not None and longest_run(note, source) >= COPIED_NOTE_RUN:
+                note = telegraphic(note)           # don't hand copied wording to the writer
+            lines.append(f"- [{f.id}] ({f.fact_type.value}, {f.support}) {note}")
         if too_close and too_close.get(item.key):
             lines.append("Phrases too close to the source in the previous attempt "
                          "(reword these points):")
@@ -113,13 +120,14 @@ def build_request(items: list[ExtractedItem], too_close: dict[str, list[str]] | 
 
 
 def compose_records(items: list[ExtractedItem], settings: Settings, llm: JsonLLM,
-                    too_close: dict[str, list[str]] | None = None) -> dict[str, ComposedRecord]:
+                    too_close: dict[str, list[str]] | None = None,
+                    source: SourceIndex | None = None) -> dict[str, ComposedRecord]:
     if not items:
         return {}
     data = llm.complete_json(
         model=settings.llm.compose_model,
         system=system_prompt(settings),
-        user=build_request(items, too_close),
+        user=build_request(items, too_close, source),
         schema=SCHEMA,
         effort=settings.llm.compose_effort,
     )

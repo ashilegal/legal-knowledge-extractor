@@ -115,7 +115,8 @@ def process_section(section: Section, cls: SectionClass, settings: Settings, llm
         too_close: dict[str, list[str]] = {}
         attempt = 0
         while pending:
-            composed = compose_records(pending, settings, llm, too_close or None)
+            composed = compose_records(pending, settings, llm, too_close or None,
+                                       ctx.index)
             raw_composed.update({k: v.model_dump() for k, v in composed.items()})
             pairs, errors = build_record_pairs(
                 section, facts.model_copy(update={"items": pending}), composed, settings)

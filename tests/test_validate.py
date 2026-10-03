@@ -46,7 +46,7 @@ def test_copied_wording_triggers_regenerate_then_review():
     first = validate(record, ctx, item, ValidationConfig(), attempt=0)
     assert first.decision == REGENERATE
     assert any("reporting misconduct to his superiors" in p for p in first.too_close)
-    second = validate(record, ctx, item, ValidationConfig(), attempt=1)
+    second = validate(record, ctx, item, ValidationConfig(), attempt=2)
     assert second.decision == REVIEW
     assert record.flags.needs_review
     assert any("too close" in r for r in record.flags.reasons)
@@ -90,3 +90,27 @@ def test_author_voice_and_low_ocr_are_flagged():
     verdict = validate(record, ctx, item, ValidationConfig())
     assert verdict.decision == REVIEW
     assert record.flags.proprietary and record.flags.low_ocr_confidence
+
+
+def test_section_lists_and_parallel_citations_are_supported():
+    from lke.validate.terms_check import check_terms
+    facts = copy.deepcopy(CASE_FACTS)
+    facts["items"][0]["identifiers"] = [
+        {"kind": "case_name", "value": "Shoemaker v. Myers", "role": "", "pages": [3]},
+        {"kind": "citation", "value": "(1990) 52 C3d 1, 801 P2d 1054", "role": "", "pages": [3]},
+        {"kind": "provision", "value": "42 USC § 1983", "role": "", "pages": [3]},
+    ]
+    section, item, record = build(facts=facts)
+    source = SOURCE + " Claims under 42 USC §§ 1981, 1983 and 1985. (1990) 52 C3d 1, 801 P2d 1054."
+    errors, _ = check_terms(record, source, item)
+    assert errors == []
+
+
+def test_copied_notes_are_reduced_before_composing():
+    from lke.extract.record_composer import build_request
+    from lke.extract.fact_extractor import ExtractedItem
+    item = ExtractedItem(**copy.deepcopy(CASE_FACTS["items"][0]))
+    item.facts[0].note = "an employee who was dismissed for reporting misconduct to his superiors"
+    request = build_request([item], source=SourceIndex(SOURCE))
+    assert "employee dismissed reporting misconduct superiors" in request
+    assert "who was dismissed for reporting" not in request

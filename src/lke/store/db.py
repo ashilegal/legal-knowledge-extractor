@@ -334,10 +334,6 @@ def record_title(record: AnyRecord) -> str:
 def record_search_text(record: AnyRecord) -> str:
     """Text indexed for search: the record's own wording plus its identifiers."""
     parts: list[str] = [record_title(record)]
-    if record.topic:
-        parts.append(record.topic.name)
-    if record.subtopic:
-        parts.append(record.subtopic.name)
     for st in record.statements():
         if isinstance(st, ComparisonItem):
             parts.append(f"{st.subject} {st.attribute} {st.value}")
@@ -350,6 +346,10 @@ def record_search_text(record: AnyRecord) -> str:
         value = getattr(record.fields, name, None)
         if value:
             parts.append(value)
+    if record.subtopic:
+        parts.append(record.subtopic.name)
+    if record.topic:
+        parts.append(record.topic.name)
     return "\n".join(parts)
 
 

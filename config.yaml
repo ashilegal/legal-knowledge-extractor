@@ -48,7 +48,7 @@ llm:
 validation:
   max_shared_word_run: 12    # this many consecutive words copied from the source = fail
   max_ngram_overlap: 0.15    # share of 8-word sequences shared with the source
-  max_regenerate_attempts: 1
+  max_regenerate_attempts: 2
   allow_statute_quotes: true
   max_quote_words: 40
 

@@ -6,6 +6,7 @@ For each item, write statements for the fields allowed for its record type (list
 
 - Write in your own plain, neutral, reference-book style. Each statement is one or two self-contained sentences.
 - Do not try to reconstruct or imitate how the source might have been worded, and do not produce a running summary in the source's order. Organise by field.
+- Notes may be fragments or may echo the source. Never reuse more than five consecutive words from a note, except legal terms and identifiers: restate each point with different words and a different sentence structure.
 - Use legal terms of art, case names, statute names, section numbers, court names, dates and other identifiers exactly as they appear in the notes or the exact-terms list. Never replace a legal term with a synonym.
 - Every statement lists, in "facts", the ids of the notes it is based on (at least one).
 - basis "source": the statement only restates what its notes say.
