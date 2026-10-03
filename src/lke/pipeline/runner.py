@@ -111,10 +111,12 @@ def process_section(section: Section, cls: SectionClass, settings: Settings, llm
 
         ctx = SectionContext.build(section, low_pages)
         pending = list(facts.items)
+        raw_composed: dict = {}
         too_close: dict[str, list[str]] = {}
         attempt = 0
         while pending:
             composed = compose_records(pending, settings, llm, too_close or None)
+            raw_composed.update({k: v.model_dump() for k, v in composed.items()})
             pairs, errors = build_record_pairs(
                 section, facts.model_copy(update={"items": pending}), composed, settings)
             out.build_errors += errors
@@ -136,6 +138,7 @@ def process_section(section: Section, cls: SectionClass, settings: Settings, llm
             "records": [r.model_dump(mode="json") for r in out.records],
             "review": [r.model_dump(mode="json") for r in out.review],
             "build_errors": out.build_errors,
+            "composed": raw_composed,              # what pass 2 returned, for checking
         })
     except FATAL_ERRORS as e:
         raise FatalRunError(f"{type(e).__name__}: {e}") from e
@@ -266,6 +269,10 @@ def reprocess(doc_id: str, settings: Settings, lib: Library, from_stage: str) ->
               "compose": [Stage.COMPOSE, Stage.VALIDATE, Stage.LINK]}[from_stage]
     for stage in stages:
         cp.reset(doc_id, stage)
+    for row in lib.list_reviews("pending"):          # they will be produced again
+        if row["doc_id"] == doc_id:
+            lib.set_review_status(row["review_id"], "superseded")
+            (settings.path("review") / f"{row['review_id']}.json").unlink(missing_ok=True)
     if from_stage == "compose":                  # keep facts but re-run the pipeline
         cp.reset(doc_id, Stage.EXTRACT)
 

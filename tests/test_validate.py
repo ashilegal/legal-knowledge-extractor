@@ -76,6 +76,7 @@ def test_invented_citation_goes_to_review():
 def test_unsupported_source_statement_goes_to_review():
     composed = copy.deepcopy(CASE_COMPOSED)
     composed["records"][0]["statements"][1]["facts"] = ["no-such-note"]
+    composed["records"][0]["statements"][1]["text"] = "Punitive damages of a million dollars were awarded."
     section, item, record = build(composed)
     verdict = validate(record, SectionContext.build(section), item, ValidationConfig())
     assert verdict.decision == REVIEW and not record.validation.grounding_ok

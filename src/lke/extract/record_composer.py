@@ -6,6 +6,7 @@ from typing import Any
 
 import regex as re
 from pydantic import BaseModel, Field
+from rapidfuzz import fuzz
 
 from lke.config import Settings
 from lke.extract.fact_extractor import ExtractedItem, SectionFacts
@@ -87,7 +88,11 @@ def system_prompt(settings: Settings) -> str:
 def build_request(items: list[ExtractedItem], too_close: dict[str, list[str]] | None = None
                   ) -> str:
     """Only the extracted notes and identifiers go to the composer, never the source text."""
-    lines = []
+    lines = [
+        "For every statement: use only the allowed fields of its item, and in \"facts\" copy "
+        "the note ids exactly as shown in square brackets, without the brackets (e.g. \"f1\").",
+        "",
+    ]
     for item in items:
         lines.append(f"## Item {item.key} ({item.record_type}): {item.name}")
         lines.append(f"Allowed fields: {', '.join(FIELDS[item.record_type])}"
@@ -161,39 +166,88 @@ def _date(value: str) -> dict[str, str]:
     return {"value": value.strip(), "precision": "day"}
 
 
+# Smaller (local) models sometimes use another record type's field name. Instead of
+# dropping those points, move them to the closest field of the right type.
+FIELD_FALLBACK: dict[str, dict[str, str]] = {
+    "CASE": {"definition": "principles", "key_points": "principles",
+             "requirements": "principles", "conditions": "important_factors",
+             "exceptions": "important_factors", "scenario": "material_facts",
+             "important_facts": "material_facts", "result": "decision",
+             "key_differences": "important_factors"},
+    "CONCEPT": {"principles": "key_points", "requirements": "key_points",
+                "conditions": "important_factors", "exceptions": "key_points",
+                "material_facts": "key_points", "legal_issues": "key_points",
+                "decision": "key_points", "important_facts": "key_points",
+                "scenario": "key_points", "result": "key_points",
+                "key_differences": "key_points"},
+    "RULE": {"definition": "requirements", "key_points": "requirements",
+             "principles": "requirements", "material_facts": "conditions",
+             "important_factors": "conditions", "legal_issues": "conditions",
+             "decision": "requirements", "important_facts": "conditions",
+             "scenario": "conditions", "result": "requirements",
+             "key_differences": "requirements"},
+    "EXAMPLE": {"material_facts": "important_facts", "key_points": "important_facts",
+                "decision": "result", "principles": "important_facts",
+                "requirements": "important_facts", "conditions": "important_facts"},
+    "COMPARISON": {"key_points": "key_differences", "principles": "key_differences",
+                   "requirements": "key_differences", "important_factors": "key_differences"},
+}
+MATCH_SCORE = 60          # similarity needed to link a statement to a note automatically
+_ID_JUNK = re.compile(r"[\s\[\]()#\"'`]")
+
+
+def _normalise_id(value: str) -> str:
+    return _ID_JUNK.sub("", value).lower()
+
+
 def build_record(section: Section, item: ExtractedItem, composed: ComposedRecord | None,
                  settings: Settings, model_info: str) -> AnyRecord:
     """Combine pass-1 identifiers (exact) with pass-2 statements (own wording)."""
     valid_pages = set(range(section.page_start, section.page_end + 1))
     facts = {f.id: f for f in item.facts}
+    order = [f.id for f in item.facts]
+    lookup: dict[str, str] = {}
+    for n, fid in enumerate(order, 1):
+        norm = _normalise_id(fid)
+        for alias in (norm, norm.split("-")[-1], str(n), f"f{n}", f"note{n}"):
+            lookup.setdefault(alias, fid)
 
     used: list[str] = []
 
+    def resolve(cited: list[str], text: str) -> list[str]:
+        """Note ids cited by the model; if none are usable, the most similar notes."""
+        ids = [lookup[_normalise_id(c)] for c in cited if _normalise_id(c) in lookup]
+        if not ids and text:
+            scored = sorted(((fuzz.token_set_ratio(text.lower(), facts[f].note.lower()), f)
+                             for f in order), reverse=True)
+            ids = [f for score, f in scored[:2] if score >= MATCH_SCORE]
+        return list(dict.fromkeys(ids))
+
     def evidence_ids(ids: list[str]) -> list[str]:
-        out = []
         for fid in ids:
-            if fid in facts:
-                eid = f"{section.section_id}:{fid}"
-                out.append(eid)
-                if fid not in used:
-                    used.append(fid)
-        return out
+            if fid not in used:
+                used.append(fid)
+        return [f"{section.section_id}:{fid}" for fid in ids]
 
     statements: dict[str, list[dict]] = {}
     comparison_items: list[dict] = []
     illustrated: list[str] = []
+    allowed = FIELDS[item.record_type]
+    fallback = FIELD_FALLBACK.get(item.record_type, {})
     if composed:
         for st in composed.statements:
-            if st.field not in FIELDS[item.record_type] or not st.text.strip():
+            field = st.field if st.field in allowed else fallback.get(st.field)
+            if field not in allowed or not st.text.strip():
                 continue
-            ids = evidence_ids(st.facts)
-            inferred = any(facts[f].support == "inferred" for f in st.facts if f in facts)
+            ids = resolve(st.facts, st.text)
+            inferred = any(facts[f].support == "inferred" for f in ids)
             basis = Basis.INTERPRETATION.value if inferred else st.basis
-            statements.setdefault(st.field, []).append(
-                {"text": st.text.strip(), "basis": basis, "evidence": ids})
+            statements.setdefault(field, []).append(
+                {"text": st.text.strip(), "basis": basis, "evidence": evidence_ids(ids)})
         for ci in composed.comparison_items:
+            ids = resolve(ci.facts, f"{ci.subject} {ci.attribute} {ci.value}")
             comparison_items.append({"subject": ci.subject, "attribute": ci.attribute,
-                                     "value": ci.value, "evidence": evidence_ids(ci.facts)})
+                                     "value": ci.value, "evidence": evidence_ids(ids)})
         illustrated = [c for c in composed.concept_illustrated if c.strip()]
 
     evidence = []

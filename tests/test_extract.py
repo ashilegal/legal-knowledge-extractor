@@ -195,3 +195,23 @@ def test_example_comparison_and_rule_records(tmp_path):
     assert rule.fields.provisions[0].provision == "Section 25F"
     assert rule.fields.provisions[0].statute == "Industrial Disputes Act, 1947"
     assert rule.fields.provisions[0].quoted_provision == "No workman shall be retrenched until"
+
+
+def test_local_model_quirks_are_tolerated(tmp_path):
+    """Ids written as [F1] / 2 / missing, and fields named for another record type."""
+    settings = Settings(root=tmp_path)
+    composed = {"records": [{"key": "case-1", "comparison_items": [], "concept_illustrated": [],
+        "statements": [
+            {"field": "material_facts", "text": "The employee was dismissed after reporting misconduct.",
+             "basis": "source", "facts": ["[F1]"]},
+            {"field": "decision", "text": "Wrongful termination claim was not barred.",
+             "basis": "source", "facts": ["2"]},
+            {"field": "key_points", "text": "Exclusivity is limited to workplace risks.",
+             "basis": "source", "facts": []},
+        ]}]}
+    _, _, (records, errors) = run_pipeline(settings, FakeLLM(CASE_FACTS, composed))
+    assert errors == []
+    f = records[0].fields
+    assert f.material_facts[0].evidence == ["sec_1:f1"]
+    assert f.decision.evidence == ["sec_1:f2"]
+    assert f.principles[0].evidence == ["sec_1:f3"]          # moved from key_points, linked by meaning
