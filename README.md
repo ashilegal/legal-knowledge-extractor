@@ -49,13 +49,14 @@ For scanned PDFs, also install [Tesseract OCR](https://github.com/UB-Mannheim/te
 
 | Command | What it does |
 |---|---|
+| `lke open` | **Open the library as a readable page in your browser** (print it to PDF with Ctrl+P) |
 | `lke status` | Documents, progress per stage, record counts |
 | `lke failures` | Sections that failed and why |
 | `lke topics` | Topic → subtopic tree with record counts |
 | `lke search "retrenchment notice"` | Keyword search (`--semantic` for meaning-based search, needs `pip install -e ".[search]"`) |
 | `lke show <record_id>` | One record as JSON, with its relationships |
 | `lke review list` / `show` / `approve` / `reject` | Records flagged for a human decision |
-| `lke export` | `records.jsonl`, `relations.jsonl`, `topics.jsonl`, `records.csv` in `data/library/export/` |
+| `lke export` | `library.html`, `records.jsonl`, `relations.jsonl`, `topics.jsonl`, `records.csv` in `data/library/export/` |
 | `lke reprocess <doc_id> --from compose` | Redo a document after changing prompts or models |
 | `lke schemas` | Write the JSON schema of each record type to `schemas/` |
 

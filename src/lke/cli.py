@@ -19,6 +19,7 @@ from lke.pipeline.runner import reprocess as reprocess_doc
 from lke.pipeline.stages import run_ingest, run_structure
 from lke.store import Checkpoint, Library, Stage
 from lke.store.exporter import export_csv, export_jsonl
+from lke.store.html_report import export_html
 
 app = typer.Typer(help="Legal Knowledge Extractor: PDFs -> structured, searchable knowledge "
                        "records.", no_args_is_help=True)
@@ -262,15 +263,28 @@ def search(query: str, limit: int = 20,
 @app.command()
 def export(out: Path = typer.Option(None, help="Folder (default: data/library/export)."),
            csv: bool = typer.Option(True, help="Also write records.csv for Excel.")):
-    """Export the library as JSONL (records, relations, topics) and CSV."""
+    """Export the library: library.html (to read), JSONL (records, relations, topics), CSV."""
     settings = _settings()
     folder = out or settings.path("library") / "export"
     with Library(library_path(settings)) as lib:
+        html = export_html(lib, folder / "library.html")
         paths = export_jsonl(lib, folder)
         if csv:
             paths.append(export_csv(lib, folder / "records.csv"))
     for p in paths:
         console.print(f"Wrote {p}")
+    console.print(f"[bold]Open this file to read the library:[/bold] {html}")
+
+
+@app.command("open")
+def open_library_page():
+    """Create library.html and open it in your web browser."""
+    import webbrowser
+    settings = _settings()
+    with Library(library_path(settings)) as lib:
+        html = export_html(lib, settings.path("library") / "export" / "library.html")
+    console.print(f"Opening {html}")
+    webbrowser.open(html.resolve().as_uri())
 
 
 @app.command()

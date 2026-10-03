@@ -74,6 +74,9 @@ def test_full_run_builds_linked_library(tmp_path):
     assert lib.get_document(report.doc_id).status == DocumentStatus.DONE
     paths = export_jsonl(lib, tmp_path / "export") + [export_csv(lib, tmp_path / "r.csv")]
     assert all(p.stat().st_size > 0 for p in paths)
+    from lke.store.html_report import export_html
+    page = export_html(lib, tmp_path / "library.html").read_text(encoding="utf-8")
+    assert "Prior written notice is a precondition." in page and "labour.pdf, p." in page
     lib.close()
 
 
